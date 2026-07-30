@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Outer Shield Hexagon of the Focus Tracker (stands out excellently on dark background) -->
+    <path
+        android:fillColor="#EADDFF"
+        android:pathData="M54,16 L87,35 L87,73 L54,92 L21,73 L21,35 Z" />
+        
+    <!-- Hourglass Frame Top Triangle -->
+    <path
+        android:fillColor="#21005D"
+        android:pathData="M38,34 L70,34 L54,50 Z" />
+
+    <!-- Hourglass Frame Bottom Triangle -->
+    <path
+        android:fillColor="#21005D"
+        android:pathData="M38,74 L70,74 L54,58 Z" />
+
+    <!-- Stylized Focus Indicator Spark (Diamond) at center point -->
+    <path
+        android:fillColor="#6750A4"
+        android:pathData="M54,50 L57,54 L54,58 L51,54 Z" />
+
+    <!-- Upper Sand Glow Indicator -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,40 L56,43 L54,46 L52,43 Z" />
+
+    <!-- Lower Flowing Sand Indicator -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,62 L56,65 L54,68 L52,65 Z" />
+</vector>

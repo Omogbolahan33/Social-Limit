@@ -1,0 +1,6 @@
+{
+  "name": "Social Limit Tracker",
+  "description": "Monitors social media screen time, alerts when limits are exceeded, shows weekly trends, structures goals, blocks distracting platforms, and invokes a Gemini AI Productivity Consultant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

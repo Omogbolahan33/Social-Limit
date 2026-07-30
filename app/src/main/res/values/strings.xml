@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Social Limit Tracker</string>
+    <string name="accessibility_desc">Monitors foreground social media applications to dynamically block launches when daily limits or scheduled study hours are actively exceeded.</string>
+</resources>
