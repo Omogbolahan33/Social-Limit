@@ -24,6 +24,10 @@ class ScreentimeAccessibilityService : AccessibilityService() {
     private var sessionStartTime: Long = 0L
     private var tickerJob: Job? = null
 
+    // App Usage Throttling (Cut-off & Cool-down tracking)
+    private val platformContinuousStretchStart = mutableMapOf<String, Long>()
+    private val platformLastSeenTimestamp = mutableMapOf<String, Long>()
+
     companion object {
         private const val TICKER_CHANNEL_ID = "social_limit_live_ticker"
         private const val TICKER_NOTIFICATION_ID = 8881
@@ -60,8 +64,27 @@ class ScreentimeAccessibilityService : AccessibilityService() {
             val platformName = packageToPlatform[packageName]
             val currentActive = activePlatform
             val now = System.currentTimeMillis()
+            val sharedPrefs = getSharedPreferences("screentime_prefs", Context.MODE_PRIVATE)
+            val isThrottleEnabled = sharedPrefs.getBoolean("throttle_enabled", true)
 
             if (platformName != null) {
+                // Check if platform is currently in Cool-off period (Cut-Off active)
+                val cooloffUntil = sharedPrefs.getLong("throttle_cooloff_until_$platformName", 0L)
+                if (isThrottleEnabled && now < cooloffUntil) {
+                    triggerLimitBlock(platformName, "THROTTLE_CUTOFF")
+                    return
+                } else if (cooloffUntil > 0L && now >= cooloffUntil) {
+                    // Cool-off expired, clear lock
+                    sharedPrefs.edit().remove("throttle_cooloff_until_$platformName").apply()
+                    platformContinuousStretchStart.remove(platformName)
+                }
+
+                // Check continuous session stretch
+                val lastSeen = platformLastSeenTimestamp[platformName] ?: 0L
+                if (now - lastSeen > 60_000L || !platformContinuousStretchStart.containsKey(platformName)) {
+                    platformContinuousStretchStart[platformName] = now
+                }
+
                 // Entered a tracked app
                 if (currentActive == null) {
                     activePlatform = platformName
@@ -69,6 +92,7 @@ class ScreentimeAccessibilityService : AccessibilityService() {
                     incrementOpenCountInDatabase(platformName)
                     startTicker(platformName)
                 } else if (currentActive != platformName) {
+                    platformLastSeenTimestamp[currentActive] = now
                     saveSessionToDatabase(currentActive, sessionStartTime, now)
                     activePlatform = platformName
                     sessionStartTime = now
@@ -78,6 +102,7 @@ class ScreentimeAccessibilityService : AccessibilityService() {
             } else {
                 // Left tracked apps entirely to settings/home launcher
                 if (currentActive != null) {
+                    platformLastSeenTimestamp[currentActive] = now
                     saveSessionToDatabase(currentActive, sessionStartTime, now)
                     activePlatform = null
                     sessionStartTime = 0L
@@ -95,16 +120,27 @@ class ScreentimeAccessibilityService : AccessibilityService() {
                         var shouldBlock = false
                         var blockReason = ""
 
-                        // 1. Check if Daily Limit is Exceeded
-                        val usage = db.dailyUsageDao().getUsageForDateAndPlatform(todayStr, platformName)
-                        val goal = db.platformGoalDao().getGoalForPlatform(platformName)
-
-                        if (goal != null && goal.isEnabled) {
-                            val limitMinutes = goal.dailyLimitMinutes
-                            val currentMinutes = (usage?.usageSeconds ?: 0L) / 60
-                            if (currentMinutes >= limitMinutes) {
+                        // 0. Check App Usage Throttling Cool-Off
+                        if (isThrottleEnabled) {
+                            val cooloffUntil = sharedPrefs.getLong("throttle_cooloff_until_$platformName", 0L)
+                            if (now < cooloffUntil) {
                                 shouldBlock = true
-                                blockReason = "LIMIT_EXCEEDED"
+                                blockReason = "THROTTLE_CUTOFF"
+                            }
+                        }
+
+                        // 1. Check if Daily Limit is Exceeded
+                        if (!shouldBlock) {
+                            val usage = db.dailyUsageDao().getUsageForDateAndPlatform(todayStr, platformName)
+                            val goal = db.platformGoalDao().getGoalForPlatform(platformName)
+
+                            if (goal != null && goal.isEnabled) {
+                                val limitMinutes = goal.dailyLimitMinutes
+                                val currentMinutes = (usage?.usageSeconds ?: 0L) / 60
+                                if (currentMinutes >= limitMinutes) {
+                                    shouldBlock = true
+                                    blockReason = "LIMIT_EXCEEDED"
+                                }
                             }
                         }
 
@@ -134,6 +170,61 @@ class ScreentimeAccessibilityService : AccessibilityService() {
                                 if (isBlockedPf) {
                                     shouldBlock = true
                                     blockReason = "POMODORO_LOCK"
+                                }
+                            }
+                        }
+
+                        // 4. Check Daylight Screen Efficiency Lockout (Cool-off Mode)
+                        if (!shouldBlock) {
+                            val sharedPrefs = getSharedPreferences("screentime_prefs", Context.MODE_PRIVATE)
+                            val isEfficiencyLockEnabled = sharedPrefs.getBoolean("efficiency_lock_enabled", false)
+                            if (isEfficiencyLockEnabled) {
+                                val threshold = sharedPrefs.getInt("efficiency_lock_threshold", 80)
+                                val efficiencyLockedList = (sharedPrefs.getString("efficiency_locked_platforms", "Instagram,TikTok,YouTube") ?: "Instagram,TikTok,YouTube")
+                                    .split(",").filter { it.isNotBlank() }
+                                
+                                val isPlatformTargeted = efficiencyLockedList.any { it.equals(platformName, ignoreCase = true) }
+                                if (isPlatformTargeted) {
+                                    val usages = db.dailyUsageDao().getUsageForDate(todayStr)
+                                    var totalSeconds = usages.sumOf { it.usageSeconds }
+                                    if (activePlatform != null && sessionStartTime > 0L) {
+                                        val sessionElapsed = (System.currentTimeMillis() - sessionStartTime) / 1000L
+                                        totalSeconds += sessionElapsed
+                                    }
+                                    val totalMins = totalSeconds / 60f
+
+                                    val allSessions = db.usageSessionDao().getSessionsForDate(todayStr)
+                                    val earliestSession = allSessions.minByOrNull { it.startTime }
+                                    val dayStartMinutes = if (earliestSession != null) {
+                                        val cal = Calendar.getInstance().apply { timeInMillis = earliestSession.startTime }
+                                        val sh = cal.get(Calendar.HOUR_OF_DAY)
+                                        val sm = cal.get(Calendar.MINUTE)
+                                        sh * 60 + sm
+                                    } else {
+                                        val cal = Calendar.getInstance()
+                                        cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+                                    }
+
+                                    val cal = Calendar.getInstance()
+                                    val hour = cal.get(Calendar.HOUR_OF_DAY)
+                                    val minute = cal.get(Calendar.MINUTE)
+                                    val curMins = hour * 60 + minute
+                                    val daytimeSoFarMinutes = if (earliestSession != null) {
+                                        val elapsedMs = System.currentTimeMillis() - earliestSession.startTime
+                                        (elapsedMs / 60000f).coerceAtLeast(1f)
+                                     } else {
+                                        1f
+                                     }
+
+                                    val safeElapsedMinutes = maxOf(daytimeSoFarMinutes, totalMins)
+                                    val curRatio = (totalMins / safeElapsedMinutes).coerceIn(0f, 1f)
+                                    val curEfficiency = 100 - (curRatio * 100).toInt()
+
+                                    if (curEfficiency < threshold) {
+                                        shouldBlock = true
+                                        blockReason = "EFFICIENCY_DRAIN"
+                                        Log.d("ScreentimeAccessibility", "BLOCK TRIGGERED: Daylight Efficiency ($curEfficiency%) fell below target ($threshold%) for $platformName")
+                                    }
                                 }
                             }
                         }
@@ -198,11 +289,105 @@ class ScreentimeAccessibilityService : AccessibilityService() {
 
     private fun startTicker(platformName: String) {
         tickerJob?.cancel()
+        var sessionStartDateStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(sessionStartTime))
         tickerJob = serviceScope.launch {
             while (activePlatform == platformName) {
                 try {
                     val db = AppDatabase.getDatabase(applicationContext)
-                    val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                    val now = System.currentTimeMillis()
+                    val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(now))
+
+                    // Midnight Transition Segmenter
+                    if (todayStr != sessionStartDateStr) {
+                        saveSessionToDatabase(platformName, sessionStartTime, now)
+                        sessionStartTime = now
+                        sessionStartDateStr = todayStr
+                        Log.d("ScreentimeAccessibility", "Midnight crossed! Rolled active tracking into separate daily record for $todayStr")
+                    }
+
+                    // --- App Usage Throttling Check (Continuous Session Cut-Off) ---
+                    val sharedPrefs = getSharedPreferences("screentime_prefs", Context.MODE_PRIVATE)
+                    val isThrottleEnabled = sharedPrefs.getBoolean("throttle_enabled", true)
+                    if (isThrottleEnabled) {
+                        val maxContinuousMinutes = sharedPrefs.getInt("throttle_max_continuous_minutes", 20)
+                        val cooloffMinutes = sharedPrefs.getInt("throttle_cooloff_minutes", 10)
+                        val stretchStart = platformContinuousStretchStart[platformName] ?: now
+                        val continuousSeconds = (now - stretchStart) / 1000L
+                        val maxContinuousSeconds = maxContinuousMinutes * 60L
+
+                        if (continuousSeconds >= maxContinuousSeconds) {
+                            // CUT-OFF TRIGGERED! Cut off like at a beer parlor
+                            val cooloffEnd = now + (cooloffMinutes * 60 * 1000L)
+                            sharedPrefs.edit()
+                                .putLong("throttle_cooloff_until_$platformName", cooloffEnd)
+                                .putLong("throttle_last_cutoff_$platformName", now)
+                                .apply()
+                            platformContinuousStretchStart.remove(platformName)
+                            cancelTickerNotification()
+                            triggerLimitBlock(platformName, "THROTTLE_CUTOFF")
+                            break
+                        } else {
+                            val remainingBeforeCutoff = maxContinuousSeconds - continuousSeconds
+                            // Show cut-off warning in ticker if under 3 minutes of continuous stretch remaining
+                            if (remainingBeforeCutoff in 1..180) {
+                                val mins = remainingBeforeCutoff / 60
+                                val secs = remainingBeforeCutoff % 60
+                                val countdownText = String.format(Locale.getDefault(), "Cut-Off Warning: %02dm %02ds of continuous stretch left!", mins, secs)
+                                showTickerNotification(platformName, countdownText)
+                            }
+                        }
+                    }
+
+                    // Check Daylight Screen Efficiency Lockout (Cool-off Mode) within search loop
+                    val isEfficiencyLockEnabled = sharedPrefs.getBoolean("efficiency_lock_enabled", false)
+                    if (isEfficiencyLockEnabled) {
+                        val threshold = sharedPrefs.getInt("efficiency_lock_threshold", 80)
+                        val efficiencyLockedList = (sharedPrefs.getString("efficiency_locked_platforms", "Instagram,TikTok,YouTube") ?: "Instagram,TikTok,YouTube")
+                            .split(",").filter { it.isNotBlank() }
+                        
+                        val isPlatformTargeted = efficiencyLockedList.any { it.equals(platformName, ignoreCase = true) }
+                        if (isPlatformTargeted) {
+                            val usages = db.dailyUsageDao().getUsageForDate(todayStr)
+                            var totalSeconds = usages.sumOf { it.usageSeconds }
+                            val currentSessionSeconds = (System.currentTimeMillis() - sessionStartTime) / 1000L
+                            totalSeconds += currentSessionSeconds
+                            val totalMins = totalSeconds / 60f
+
+                            val allSessions = db.usageSessionDao().getSessionsForDate(todayStr)
+                            val earliestSession = allSessions.minByOrNull { it.startTime }
+                            val dayStartMinutes = if (earliestSession != null) {
+                                val cal = Calendar.getInstance().apply { timeInMillis = earliestSession.startTime }
+                                val sh = cal.get(Calendar.HOUR_OF_DAY)
+                                val sm = cal.get(Calendar.MINUTE)
+                                sh * 60 + sm
+                            } else {
+                                val cal = Calendar.getInstance()
+                                cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+                            }
+
+                            val cal = Calendar.getInstance()
+                            val hour = cal.get(Calendar.HOUR_OF_DAY)
+                            val minute = cal.get(Calendar.MINUTE)
+                            val curMins = hour * 60 + minute
+                            val daytimeSoFarMinutes = if (earliestSession != null) {
+                                val elapsedMs = System.currentTimeMillis() - earliestSession.startTime
+                                (elapsedMs / 60000f).coerceAtLeast(1f)
+                             } else {
+                                1f
+                             }
+
+                            val safeElapsedMinutes = maxOf(daytimeSoFarMinutes, totalMins)
+                            val curRatio = (totalMins / safeElapsedMinutes).coerceIn(0f, 1f)
+                            val curEfficiency = 100 - (curRatio * 100).toInt()
+
+                            if (curEfficiency < threshold) {
+                                cancelTickerNotification()
+                                triggerLimitBlock(platformName, "EFFICIENCY_DRAIN")
+                                break // stop ticker and close app immediately
+                            }
+                        }
+                    }
+
                     val usage = db.dailyUsageDao().getUsageForDateAndPlatform(todayStr, platformName)
                     val goal = db.platformGoalDao().getGoalForPlatform(platformName)
 

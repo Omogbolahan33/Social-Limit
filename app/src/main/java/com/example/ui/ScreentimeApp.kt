@@ -1,8 +1,10 @@
 package com.example.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -24,18 +26,34 @@ fun ScreentimeApp(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(0) }
-    var showSettingsDialog by remember { mutableStateOf(false) }
     var showNotificationsDialog by remember { mutableStateOf(false) }
     val activeAlerts by viewModel.activeAlerts.collectAsState()
+    val userName by viewModel.userName.collectAsState()
+    val onboardingCompleted by viewModel.onboardingCompleted.collectAsState()
 
     val context = androidx.compose.ui.platform.LocalContext.current
     var hasPermission by remember { mutableStateOf(false) }
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
 
+    if (!onboardingCompleted) {
+        OnboardingScreen(
+            viewModel = viewModel,
+            onFinish = {
+                // Onboarding finished
+            },
+            modifier = modifier
+        )
+        return
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                hasPermission = viewModel.hasUsageStatsPermission()
+                val permitted = viewModel.hasUsageStatsPermission()
+                hasPermission = permitted
+                if (permitted) {
+                    viewModel.syncActualUsage()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -50,52 +68,92 @@ fun ScreentimeApp(
             .background(BrandColors.DarkSlateBg),
         containerColor = BrandColors.DarkSlateBg,
         topBar = {
+            val daytime = GreetingHelper.getCurrentDaytimeState()
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            text = "SOCIAL LIMIT",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Black,
-                            color = BrandColors.SoftWhite,
-                            letterSpacing = 1.sp
-                        )
-                        Text(
-                            text = if (hasPermission) "REAL-TIME SECURED" else "PERMISSION REQUIRED",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (hasPermission) BrandColors.SecondaryTeal else BrandColors.ErrorRose,
-                            fontWeight = FontWeight.Bold
-                        )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // User Avatar with daytime glowing accent ring
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(daytime.accentColor.copy(alpha = 0.15f), shape = CircleShape)
+                                .border(1.5.dp, daytime.accentColor.copy(alpha = 0.5f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (userName.isNotBlank()) {
+                                Text(
+                                    text = userName.take(1).uppercase(),
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 15.sp,
+                                    color = BrandColors.SoftWhite
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = BrandColors.SoftWhite,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = if (userName.isNotBlank()) "Hi, $userName ${daytime.smileyEmoji}" else "${daytime.greetingPrefix} ${daytime.smileyEmoji}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BrandColors.SoftWhite,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+
+                            // Real daytime/weather icon and condition badge
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = daytime.weatherIcon,
+                                    contentDescription = daytime.conditionText,
+                                    tint = daytime.accentColor,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "${daytime.weatherEmoji} ${daytime.conditionText}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = daytime.accentColor
+                                )
+                            }
+                        }
                     }
                 },
                 actions = {
-                    if (hasPermission) {
-                        IconButton(
-                            onClick = {
-                                viewModel.syncActualUsage()
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "System Usage stats updated successfully!",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Manual sync with phone metrics",
-                                tint = BrandColors.SoftWhite
-                            )
-                        }
-                    }
-                    IconButton(
-                        onClick = { showSettingsDialog = true }
+                    // Daytime weather & smiley pill badge
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(daytime.accentColor.copy(alpha = 0.12f))
+                            .border(1.dp, daytime.accentColor.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Notification & Preference Settings",
-                            tint = BrandColors.SoftWhite
+                        Text(
+                            text = "${daytime.weatherEmoji} ${daytime.smileyEmoji}",
+                            fontSize = 13.sp
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
                     IconButton(
                         onClick = { showNotificationsDialog = true }
                     ) {
@@ -115,54 +173,57 @@ fun ScreentimeApp(
                             }
                         }
                     }
-                    if (hasPermission) {
-                        Box(
-                            modifier = Modifier
-                                .padding(end = 16.dp)
-                                .size(10.dp)
-                                .background(BrandColors.SecondaryTeal, shape = CircleShape)
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .padding(end = 16.dp)
-                                .size(10.dp)
-                                .background(BrandColors.ErrorRose, shape = CircleShape)
-                        )
-                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BrandColors.DarkSlateBg,
-                    titleContentColor = BrandColors.SoftWhite,
                     actionIconContentColor = BrandColors.SoftWhite
                 )
             )
         },
         bottomBar = {
+            val daytime = GreetingHelper.getCurrentDaytimeState()
             NavigationBar(
                 containerColor = BrandColors.TonalSurface,
                 tonalElevation = 8.dp,
                 modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
             ) {
+                // Tab 0: Dashboard with real daytime weather icon & smiley
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
-                    label = { Text("Dashboard", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    icon = {
+                        BadgedBox(
+                            badge = {
+                                if (selectedTab == 0) {
+                                    Text(
+                                        text = daytime.smileyEmoji,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = daytime.weatherIcon,
+                                contentDescription = "Daylight Dashboard"
+                            )
+                        }
+                    },
+                    label = { Text("${daytime.weatherEmoji} Today", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = BrandColors.PrimaryIndigo,
-                        selectedTextColor = BrandColors.PrimaryIndigo,
-                        indicatorColor = BrandColors.PrimaryIndigo.copy(alpha = 0.15f),
+                        selectedIconColor = daytime.accentColor,
+                        selectedTextColor = daytime.accentColor,
+                        indicatorColor = daytime.accentColor.copy(alpha = 0.18f),
                         unselectedIconColor = BrandColors.SlateGray,
                         unselectedTextColor = BrandColors.SlateGray
                     )
                 )
 
+                // Tab 1: Limits
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.Adjust, contentDescription = "Goals") },
-                    label = { Text("Limits", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    icon = { Icon(Icons.Default.TrackChanges, contentDescription = "Goals & Limits") },
+                    label = { Text("🎯 Limits", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = BrandColors.PrimaryIndigo,
                         selectedTextColor = BrandColors.PrimaryIndigo,
@@ -172,11 +233,12 @@ fun ScreentimeApp(
                     )
                 )
 
+                // Tab 2: Focus & Shield
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Default.Block, contentDescription = "Focus Filters") },
-                    label = { Text("Blocks", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    icon = { Icon(Icons.Default.Shield, contentDescription = "Focus Shield") },
+                    label = { Text("🛡️ Blocks", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = BrandColors.PrimaryIndigo,
                         selectedTextColor = BrandColors.PrimaryIndigo,
@@ -186,11 +248,12 @@ fun ScreentimeApp(
                     )
                 )
 
+                // Tab 3: Settings
                 NavigationBarItem(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
-                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "AI Advice") },
-                    label = { Text("AI Coach", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    icon = { Icon(Icons.Default.Tune, contentDescription = "Settings") },
+                    label = { Text("⚙️ Settings", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = BrandColors.PrimaryIndigo,
                         selectedTextColor = BrandColors.PrimaryIndigo,
@@ -212,16 +275,9 @@ fun ScreentimeApp(
                 0 -> DashboardScreen(viewModel = viewModel)
                 1 -> GoalsScreen(viewModel = viewModel)
                 2 -> BlockScreen(viewModel = viewModel)
-                3 -> AIInsightsScreen(viewModel = viewModel)
+                3 -> SettingsScreen(viewModel = viewModel)
             }
         }
-    }
-
-    if (showSettingsDialog) {
-        SettingsDialog(
-            viewModel = viewModel,
-            onDismiss = { showSettingsDialog = false }
-        )
     }
 
     if (showNotificationsDialog) {

@@ -7,22 +7,22 @@
     
     <!-- Outer Shield Hexagon of the Focus Tracker (stands out excellently on dark background) -->
     <path
-        android:fillColor="#EADDFF"
+        android:fillColor="#FFD54F"
         android:pathData="M54,16 L87,35 L87,73 L54,92 L21,73 L21,35 Z" />
         
     <!-- Hourglass Frame Top Triangle -->
     <path
-        android:fillColor="#21005D"
+        android:fillColor="#0D47A1"
         android:pathData="M38,34 L70,34 L54,50 Z" />
 
     <!-- Hourglass Frame Bottom Triangle -->
     <path
-        android:fillColor="#21005D"
+        android:fillColor="#0D47A1"
         android:pathData="M38,74 L70,74 L54,58 Z" />
 
     <!-- Stylized Focus Indicator Spark (Diamond) at center point -->
     <path
-        android:fillColor="#6750A4"
+        android:fillColor="#FFB300"
         android:pathData="M54,50 L57,54 L54,58 L51,54 Z" />
 
     <!-- Upper Sand Glow Indicator -->

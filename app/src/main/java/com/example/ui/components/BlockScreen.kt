@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.BlockScheduleEntity
 import com.example.viewmodel.ScreentimeViewModel
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -88,9 +89,9 @@ fun BlockScreen(
                 onClick = { activeSubTab = 0 },
                 text = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Schedules", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Schedules", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 },
                 selectedContentColor = BrandColors.SoftWhite,
@@ -101,9 +102,22 @@ fun BlockScreen(
                 onClick = { activeSubTab = 1 },
                 text = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Timer, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Pomodoro Lock", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Icon(Icons.Default.HourglassBottom, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Throttling", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                },
+                selectedContentColor = BrandColors.SoftWhite,
+                unselectedContentColor = BrandColors.SlateGray
+            )
+            Tab(
+                selected = activeSubTab == 2,
+                onClick = { activeSubTab = 2 },
+                text = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Timer, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Pomodoro", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 },
                 selectedContentColor = BrandColors.SoftWhite,
@@ -116,7 +130,383 @@ fun BlockScreen(
         Box(modifier = Modifier.weight(1f)) {
             when (activeSubTab) {
                 0 -> BlockSchedulesTabContent(viewModel = viewModel)
-                1 -> BlockerPomodoroTabContent(viewModel = viewModel)
+                1 -> AppThrottlingTabContent(viewModel = viewModel)
+                2 -> BlockerPomodoroTabContent(viewModel = viewModel)
+            }
+        }
+    }
+}
+
+/**
+ * App Usage Throttling Content (Continuous Usage Cut-Off & Cool-Down)
+ * Cuts the user off after extended non-stop use (like being cut off from a bar),
+ * with configurable continuous stretch duration and mandatory cool-off period.
+ */
+@Composable
+fun AppThrottlingTabContent(viewModel: ScreentimeViewModel) {
+    val throttleEnabled by viewModel.throttleEnabled.collectAsState()
+    val maxContinuousMinutes by viewModel.throttleMaxContinuousMinutes.collectAsState()
+    val cooloffMinutes by viewModel.throttleCooloffMinutes.collectAsState()
+    val activeCooloffs by viewModel.throttleActiveCooloffs.collectAsState()
+
+    // Refresh active cool-offs periodically
+    LaunchedEffect(Unit) {
+        while (true) {
+            viewModel.refreshActiveCooloffs()
+            delay(1000L)
+        }
+    }
+
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(bottom = 80.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Concept Hero Card (Beer Parlor Cut-off style)
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = BrandColors.SolarAmber.copy(alpha = 0.08f)),
+                border = BorderStroke(1.dp, BrandColors.SolarAmber.copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(BrandColors.SolarAmber.copy(alpha = 0.2f), shape = CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.HourglassBottom,
+                            contentDescription = null,
+                            tint = BrandColors.SolarAmber,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "CONTINUOUS USAGE CUT-OFF",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BrandColors.SolarAmber,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "Like being cut off at a beer parlor, using a monitored app non-stop for an extended stretch will lock the app until you complete a mandatory cool-off break.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BrandColors.SoftWhite.copy(alpha = 0.9f),
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // Master Switch Card
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Enable App Throttling",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandColors.SoftWhite
+                        )
+                        Text(
+                            text = if (throttleEnabled) "Cut-off and cool-off active on monitored apps" else "Throttling is turned off",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BrandColors.SlateGray
+                        )
+                    }
+                    Switch(
+                        checked = throttleEnabled,
+                        onCheckedChange = { viewModel.setThrottleEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = BrandColors.SoftWhite,
+                            checkedTrackColor = BrandColors.SolarAmber
+                        )
+                    )
+                }
+            }
+        }
+
+        // Configuration Section (Visible when enabled)
+        if (throttleEnabled) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        // 1. Duration before cut-off
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Duration Before Cut-Off",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BrandColors.SoftWhite
+                                )
+                                Text(
+                                    text = "Max non-stop continuous usage stretch",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = BrandColors.SlateGray
+                                )
+                            }
+                            Text(
+                                text = "$maxContinuousMinutes min",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                color = BrandColors.SolarAmber
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Slider(
+                            value = maxContinuousMinutes.toFloat(),
+                            onValueChange = { viewModel.setThrottleMaxContinuousMinutes(it.toInt()) },
+                            valueRange = 5f..90f,
+                            steps = 16,
+                            colors = SliderDefaults.colors(
+                                thumbColor = BrandColors.SolarAmber,
+                                activeTrackColor = BrandColors.SolarAmber
+                            )
+                        )
+
+                        // Quick preset chips for cut-off
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(10, 15, 20, 30, 45).forEach { preset ->
+                                val isSelected = maxContinuousMinutes == preset
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) BrandColors.SolarAmber else BrandColors.DarkSlateBg)
+                                        .clickable { viewModel.setThrottleMaxContinuousMinutes(preset) }
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "${preset}m",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSelected) BrandColors.DarkSlateBg else BrandColors.SlateGray
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+                        HorizontalDivider(color = BrandColors.SlateGray.copy(alpha = 0.15f))
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // 2. Cool-off period
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Mandatory Cool-Off Period",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BrandColors.SoftWhite
+                                )
+                                Text(
+                                    text = "Time away required before you can resume",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = BrandColors.SlateGray
+                                )
+                            }
+                            Text(
+                                text = "$cooloffMinutes min",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                color = BrandColors.PrimaryIndigo
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Slider(
+                            value = cooloffMinutes.toFloat(),
+                            onValueChange = { viewModel.setThrottleCooloffMinutes(it.toInt()) },
+                            valueRange = 2f..45f,
+                            steps = 14,
+                            colors = SliderDefaults.colors(
+                                thumbColor = BrandColors.PrimaryIndigo,
+                                activeTrackColor = BrandColors.PrimaryIndigo
+                            )
+                        )
+
+                        // Quick preset chips for cool-off
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(5, 10, 15, 20, 30).forEach { preset ->
+                                val isSelected = cooloffMinutes == preset
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) BrandColors.PrimaryIndigo else BrandColors.DarkSlateBg)
+                                        .clickable { viewModel.setThrottleCooloffMinutes(preset) }
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "${preset}m",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isSelected) BrandColors.SoftWhite else BrandColors.SlateGray
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Summary Info Pill
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = BrandColors.SlateGray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Rule: Using any monitored app for $maxContinuousMinutes minutes non-stop cuts you off for a mandatory $cooloffMinutes-minute cool-off period.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BrandColors.SlateGray
+                        )
+                    }
+                }
+            }
+
+            // Active Throttled Cool-Offs Section
+            item {
+                Text(
+                    text = "Active Throttled Cool-Offs",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = BrandColors.SoftWhite,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+
+            if (activeCooloffs.isEmpty()) {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = BrandColors.ForestGreen,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "No apps are currently throttled. Continuous session counters are actively monitoring in the background.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandColors.SlateGray
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(activeCooloffs.entries.toList()) { (platform, secondsLeft) ->
+                    val mins = secondsLeft / 60
+                    val secs = secondsLeft % 60
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = BrandColors.SolarAmber.copy(alpha = 0.12f)),
+                        border = BorderStroke(1.dp, BrandColors.SolarAmber.copy(alpha = 0.3f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                PlatformAppIcon(platformName = platform, size = 36.dp)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "$platform (Cut Off)",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BrandColors.SoftWhite
+                                    )
+                                    Text(
+                                        text = String.format(Locale.getDefault(), "Cool-Off: %02d:%02d remaining", mins, secs),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = BrandColors.SolarAmber,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = { viewModel.resetCooloff(platform) },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandColors.SolarAmber),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text("Reset", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -125,9 +515,8 @@ fun BlockScreen(
 @Composable
 fun AccessibilityAssistCard(onEnableClick: () -> Unit) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = premiumCardBorder(),
-        elevation = premiumCardElevation(),
+        colors = CardDefaults.cardColors(containerColor = BrandColors.ErrorRose.copy(alpha = 0.08f)),
+        border = BorderStroke(1.dp, BrandColors.ErrorRose.copy(alpha = 0.4f)),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -244,10 +633,8 @@ fun BlockSchedulesTabContent(viewModel: ScreentimeViewModel) {
 
                 items(scheduleList) { schedule ->
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = premiumCardElevation(),
-                        border = premiumCardBorder()
+                        colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
@@ -350,11 +737,10 @@ fun BlockSchedulesTabContent(viewModel: ScreentimeViewModel) {
                                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                                         ) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    imageVector = BrandColors.getPlatformIcon(p),
-                                                    contentDescription = null,
-                                                    tint = pColor,
-                                                    modifier = Modifier.size(12.dp)
+                                                PlatformAppIcon(
+                                                    platformName = p,
+                                                    size = 14.dp,
+                                                    clipShape = RoundedCornerShape(3.dp)
                                                 )
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 Text(
@@ -451,11 +837,10 @@ fun BlockSchedulesTabContent(viewModel: ScreentimeViewModel) {
                                     colors = CheckboxDefaults.colors(checkedColor = BrandColors.PrimaryIndigo)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = BrandColors.getPlatformIcon(platform),
-                                    contentDescription = null,
-                                    tint = BrandColors.getPlatformColor(platform),
-                                    modifier = Modifier.size(16.dp)
+                                PlatformAppIcon(
+                                    platformName = platform,
+                                    size = 20.dp,
+                                    clipShape = RoundedCornerShape(4.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(platform, color = BrandColors.SoftWhite, fontSize = 14.sp)
@@ -589,10 +974,8 @@ fun BlockerPomodoroTabContent(viewModel: ScreentimeViewModel) {
 
             // Locked platform notification summary
             Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
                 shape = RoundedCornerShape(16.dp),
-                elevation = premiumCardElevation(),
-                border = premiumCardBorder(),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -636,7 +1019,11 @@ fun BlockerPomodoroTabContent(viewModel: ScreentimeViewModel) {
                                 contentAlignment = Alignment.Center
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(BrandColors.getPlatformIcon(platform), contentDescription = null, tint = pColor, modifier = Modifier.size(12.dp))
+                                    PlatformAppIcon(
+                                        platformName = platform,
+                                        size = 14.dp,
+                                        clipShape = RoundedCornerShape(3.dp)
+                                    )
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text(platform, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = pColor)
                                 }
@@ -729,10 +1116,8 @@ fun BlockerPomodoroTabContent(viewModel: ScreentimeViewModel) {
             // Platform choices card list
             item {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
                     shape = RoundedCornerShape(16.dp),
-                    elevation = premiumCardElevation(),
-                    border = premiumCardBorder(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -759,11 +1144,10 @@ fun BlockerPomodoroTabContent(viewModel: ScreentimeViewModel) {
                                     colors = CheckboxDefaults.colors(checkedColor = BrandColors.PrimaryIndigo)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = BrandColors.getPlatformIcon(platform),
-                                    contentDescription = null,
-                                    tint = BrandColors.getPlatformColor(platform),
-                                    modifier = Modifier.size(18.dp)
+                                PlatformAppIcon(
+                                    platformName = platform,
+                                    size = 22.dp,
+                                    clipShape = RoundedCornerShape(5.dp)
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(platform, color = BrandColors.SoftWhite, fontSize = 14.sp, fontWeight = FontWeight.Medium)

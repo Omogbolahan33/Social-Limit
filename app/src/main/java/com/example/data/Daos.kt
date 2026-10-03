@@ -20,6 +20,9 @@ interface DailyUsageDao {
     @Query("DELETE FROM daily_usage")
     suspend fun clearAll()
 
+    @Query("DELETE FROM daily_usage WHERE date < :thresholdDate")
+    suspend fun deleteOlderThan(thresholdDate: String): Int
+
     @Query("UPDATE daily_usage SET usageSeconds = usageSeconds + :incrementSeconds WHERE date = :date AND platform = :platform")
     suspend fun incrementUsageSeconds(date: String, platform: String, incrementSeconds: Long): Int
 }
@@ -62,9 +65,15 @@ interface UsageSessionDao {
     @Query("SELECT * FROM usage_sessions WHERE date = :date AND platform = :platform ORDER BY startTime ASC")
     suspend fun getSessionsForDateAndPlatform(date: String, platform: String): List<UsageSessionEntity>
 
+    @Query("SELECT * FROM usage_sessions WHERE date = :date ORDER BY startTime ASC")
+    suspend fun getSessionsForDate(date: String): List<UsageSessionEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: UsageSessionEntity): Long
 
     @Query("DELETE FROM usage_sessions")
     suspend fun clearAll()
+
+    @Query("DELETE FROM usage_sessions WHERE date < :thresholdDate")
+    suspend fun deleteOlderThan(thresholdDate: String): Int
 }

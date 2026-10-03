@@ -135,10 +135,8 @@ fun GoalsScreen(
                 items(goalList) { goal ->
                     val color = BrandColors.getPlatformColor(goal.platform)
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        shape = RoundedCornerShape(16.dp),
-                        elevation = premiumCardElevation(),
-                        border = premiumCardBorder()
+                        colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Row(
                             modifier = Modifier
@@ -146,19 +144,10 @@ fun GoalsScreen(
                                 .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .background(color.copy(alpha = 0.15f), shape = CircleShape)
-                            ) {
-                                Icon(
-                                    imageVector = BrandColors.getPlatformIcon(goal.platform),
-                                    contentDescription = goal.platform,
-                                    tint = color,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                            PlatformAppIcon(
+                                platformName = goal.platform,
+                                size = 40.dp
+                            )
 
                             Spacer(modifier = Modifier.width(16.dp))
 
@@ -413,22 +402,11 @@ fun GoalsScreen(
                                             .padding(horizontal = 12.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Box(
-                                            contentAlignment = Alignment.Center,
-                                            modifier = Modifier
-                                                .size(36.dp)
-                                                .background(
-                                                    color = BrandColors.getPlatformColor(appName).copy(alpha = 0.15f),
-                                                    shape = CircleShape
-                                                )
-                                        ) {
-                                            Icon(
-                                                imageVector = BrandColors.getPlatformIcon(appName),
-                                                contentDescription = appName,
-                                                tint = BrandColors.getPlatformColor(appName),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
+                                        PlatformAppIcon(
+                                            platformName = appName,
+                                            packageName = packageName,
+                                            size = 36.dp
+                                        )
                                         
                                         Spacer(modifier = Modifier.width(12.dp))
                                         

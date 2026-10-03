@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- YouTube Red Background -->
+    <path
+        android:fillColor="#FF0000"
+        android:pathData="M43.4,14.4c-0.5,-1.9 -2,-3.4 -3.9,-3.9C36,9.5 24,9.5 24,9.5s-12,0 -15.5,1C6.6,11 5.1,12.5 4.6,14.4C3.6,17.9 3.6,24 3.6,24s0,6.1 1,9.6c0.5,1.9 2,3.4 3.9,3.9c3.5,1 15.5,1 15.5,1s12,0 15.5,-1c1.9,-0.5 3.4,-2 3.9,-3.9c1,-3.5 1,-9.6 1,-9.6S44.4,17.9 43.4,14.4z" />
+    <!-- YouTube Play Triangle -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M19.5,30l11.5,-6l-11.5,-6z" />
+</vector>

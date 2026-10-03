@@ -14,53 +14,50 @@ import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme =
   darkColorScheme(
-    primary = Color(0xFF0A84FF),         // Apple System Blue (Dark)
+    primary = Color(0xFF1E88E5),          // Vibrant Blue
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF003060),
-    onPrimaryContainer = Color(0xFFD6E4FF),
-    secondary = Color(0xFF30D158),       // Apple System Green (Dark)
-    onSecondary = Color.Black,
-    secondaryContainer = Color(0xFF003810),
-    onSecondaryContainer = Color(0xFFD0FFD6),
-    tertiary = Color(0xBFBF5AF2),        // Apple System Purple (Dark)
+    primaryContainer = Color(0xFF0D47A1),  // Deep Navy Blue
+    onPrimaryContainer = Color(0xFFE3F2FD),
+    secondary = Color(0xFFFFB300),        // Gold
+    onSecondary = Color(0xFF121212),
+    secondaryContainer = Color(0xFF3E2723), // Deep Chocolate
+    onSecondaryContainer = Color(0xFFD7CCC8),
+    tertiary = Color(0xFF43A047),         // Green
     onTertiary = Color.White,
-    background = Color(0xFF000000),      // True Black OLED Background
-    onBackground = Color(0xFFFFFFFF),    // Full White primary text
-    surface = Color(0xFF2C2C2E),         // Cards/surfaces visual container
-    onSurface = Color(0xFFFFFFFF),       // Full White
-    surfaceVariant = Color(0xFF1C1C1E),  // Apple Grouped background
-    outline = Color(0xFF38383A),         // Apple Hairline Separator
-    error = Color(0xFFFF453A),           // Apple Destructive Red (Dark)
+    background = Color(0xFF121212),       // Blank/Black
+    onBackground = Color.White,
+    surface = Color(0xFF1E1E1E),
+    onSurface = Color.White,
+    outline = Color(0xFF455A64),
+    error = Color(0xFFE65100),            // Orange
     onError = Color.White
   )
 
 private val LightColorScheme =
   lightColorScheme(
-    primary = Color(0xFF007AFF),        // Apple System Blue (Light)
+    primary = Color(0xFF1565C0),        // Deep Royal Blue
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE1F0FF),
-    onPrimaryContainer = Color(0xFF001A40),
-    secondary = Color(0xFF34C759),      // Apple System Green (Light)
+    primaryContainer = Color(0xFFE3F2FD), // Soft Ice Blue container
+    onPrimaryContainer = Color(0xFF0D47A1), // Deep Navy Blue text
+    secondary = Color(0xFF4E342E),      // Rich Chocolate Brown
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE3FCE9),
-    onSecondaryContainer = Color(0xFF00360C),
-    tertiary = Color(0xFFAF52DE),       // Apple System Purple (Light)
-    onTertiary = Color.White,
-    background = Color(0xFFFFFFFF),     // Pure White Background
-    onBackground = Color(0xFF000000),   // Full Black primary text
-    surface = Color(0xFFFFFFFF),        // Cards/elevated surfaces (White)
-    onSurface = Color(0xFF000000),      // Full Black text
-    surfaceVariant = Color(0xFFF2F2F7), // Apple Grouped Background
-    onSurfaceVariant = Color(0xFF3C3C43), // 60% opacity look text
-    outline = Color(0x1F3C3C43),        // Apple separator (12% opacity)
-    error = Color(0xFFFF3B30),          // Apple Destructive Red (Light)
+    secondaryContainer = Color(0xFFEFEBE9), // Warm Chocolate Latte helper container
+    onSecondaryContainer = Color(0xFF3E2723), // Deep Chocolate text
+    tertiary = Color(0xFFFFB300),       // Brilliant Gold
+    onTertiary = Color(0xFF121212),
+    background = Color(0xFFF8F9FA),     // Crisp clean white/off-white canvas (zero purple)
+    onBackground = Color(0xFF121212),   // Dark blank/charcoal text
+    surface = Color(0xFFFFFFFF),        // Pure white containers/cards
+    onSurface = Color(0xFF121212),      // Charcoal text on containers
+    outline = Color(0xFFCFD8DC),        // Geometric border outlines
+    error = Color(0xFFE65100),          // Vibrant Orange alerts
     onError = Color.White
   )
 
 @Composable
 fun MyApplicationTheme(
   darkTheme: Boolean = isSystemInDarkTheme(),
-  // Dynamic color is available on Android 12+
+  // Strict palette enforcement: dynamicColor disabled to eliminate accidental system purple tints
   dynamicColor: Boolean = false,
   content: @Composable () -> Unit,
 ) {

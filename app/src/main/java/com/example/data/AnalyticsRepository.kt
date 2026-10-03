@@ -36,6 +36,10 @@ class AnalyticsRepository(
         usageSessionDao.getSessionsForDateAndPlatform(date, platform)
     }
 
+    suspend fun getSessionsForDate(date: String): List<UsageSessionEntity> = withContext(Dispatchers.IO) {
+        usageSessionDao.getSessionsForDate(date)
+    }
+
     suspend fun incrementUsage(platform: String, seconds: Long) = withContext(Dispatchers.IO) {
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         val existing = dailyUsageDao.getUsageForDateAndPlatform(date, platform)
@@ -67,7 +71,13 @@ class AnalyticsRepository(
         val entity = if (existing == null) {
             DailyUsageEntity(date = date, platform = platform, usageSeconds = seconds, openCount = openCount)
         } else {
-            existing.copy(usageSeconds = seconds, openCount = openCount)
+            val finalSeconds = maxOf(existing.usageSeconds, seconds)
+            val finalOpens = if (openCount > 0) {
+                maxOf(existing.openCount, openCount)
+            } else {
+                existing.openCount
+            }
+            existing.copy(usageSeconds = finalSeconds, openCount = finalOpens)
         }
         dailyUsageDao.insertOrUpdate(entity)
     }
@@ -91,6 +101,21 @@ class AnalyticsRepository(
     suspend fun clearAllData() = withContext(Dispatchers.IO) {
         dailyUsageDao.clearAll()
         usageSessionDao.clearAll()
+    }
+
+    // Purge historical screentime tracking older than 1 month in FIFO order
+    suspend fun purgeOldData() = withContext(Dispatchers.IO) {
+        val calendar = Calendar.getInstance()
+        calendar.add(Calendar.DAY_OF_YEAR, -30) // 1 month threshold
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val thresholdDate = sdf.format(calendar.time)
+        try {
+            val deletedUsage = dailyUsageDao.deleteOlderThan(thresholdDate)
+            val deletedSessions = usageSessionDao.deleteOlderThan(thresholdDate)
+            Log.d("AnalyticsRepository", "Purge FIFO cache (older than $thresholdDate): Deleted $deletedUsage daily usage metrics and $deletedSessions session traces.")
+        } catch (e: Exception) {
+            Log.e("AnalyticsRepository", "Error during purgeOldData: ${e.message}", e)
+        }
     }
 
     // Ensure database has rich seed data for immediate playability
