@@ -32,19 +32,8 @@ fun ScreentimeApp(
     val onboardingCompleted by viewModel.onboardingCompleted.collectAsState()
 
     val context = androidx.compose.ui.platform.LocalContext.current
-    var hasPermission by remember { mutableStateOf(false) }
+    var hasPermission by remember { mutableStateOf(viewModel.hasUsageStatsPermission()) }
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
-
-    if (!onboardingCompleted) {
-        OnboardingScreen(
-            viewModel = viewModel,
-            onFinish = {
-                // Onboarding finished
-            },
-            modifier = modifier
-        )
-        return
-    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -60,6 +49,17 @@ fun ScreentimeApp(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
+    }
+
+    if (!onboardingCompleted || userName.isBlank() || !hasPermission) {
+        OnboardingScreen(
+            viewModel = viewModel,
+            onFinish = {
+                hasPermission = viewModel.hasUsageStatsPermission()
+            },
+            modifier = modifier
+        )
+        return
     }
 
     Scaffold(
@@ -138,22 +138,6 @@ fun ScreentimeApp(
                     }
                 },
                 actions = {
-                    // Daytime weather & smiley pill badge
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(daytime.accentColor.copy(alpha = 0.12f))
-                            .border(1.dp, daytime.accentColor.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "${daytime.weatherEmoji} ${daytime.smileyEmoji}",
-                            fontSize = 13.sp
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
                     IconButton(
                         onClick = { showNotificationsDialog = true }
                     ) {
@@ -187,28 +171,17 @@ fun ScreentimeApp(
                 tonalElevation = 8.dp,
                 modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
             ) {
-                // Tab 0: Dashboard with real daytime weather icon & smiley
+                // Tab 0: Dashboard
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
                     icon = {
-                        BadgedBox(
-                            badge = {
-                                if (selectedTab == 0) {
-                                    Text(
-                                        text = daytime.smileyEmoji,
-                                        fontSize = 10.sp
-                                    )
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = daytime.weatherIcon,
-                                contentDescription = "Daylight Dashboard"
-                            )
-                        }
+                        Icon(
+                            imageVector = daytime.weatherIcon,
+                            contentDescription = "Daylight Dashboard"
+                        )
                     },
-                    label = { Text("${daytime.weatherEmoji} Today", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    label = { Text("Today", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = daytime.accentColor,
                         selectedTextColor = daytime.accentColor,
@@ -223,7 +196,7 @@ fun ScreentimeApp(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
                     icon = { Icon(Icons.Default.TrackChanges, contentDescription = "Goals & Limits") },
-                    label = { Text("🎯 Limits", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    label = { Text("Limits", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = BrandColors.PrimaryIndigo,
                         selectedTextColor = BrandColors.PrimaryIndigo,
@@ -238,7 +211,7 @@ fun ScreentimeApp(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
                     icon = { Icon(Icons.Default.Shield, contentDescription = "Focus Shield") },
-                    label = { Text("🛡️ Blocks", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    label = { Text("Blocks", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = BrandColors.PrimaryIndigo,
                         selectedTextColor = BrandColors.PrimaryIndigo,
@@ -253,7 +226,7 @@ fun ScreentimeApp(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
                     icon = { Icon(Icons.Default.Tune, contentDescription = "Settings") },
-                    label = { Text("⚙️ Settings", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                    label = { Text("Settings", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = BrandColors.PrimaryIndigo,
                         selectedTextColor = BrandColors.PrimaryIndigo,

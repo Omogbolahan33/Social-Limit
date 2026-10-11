@@ -76,6 +76,15 @@ fun OnboardingScreen(
     var hasPermission by remember { mutableStateOf(viewModel.hasUsageStatsPermission()) }
     val installedApps by viewModel.installedApps.collectAsState()
     var showInstalledAppsList by remember { mutableStateOf(false) }
+    var hasAutoTriggeredPrompt by remember { mutableStateOf(false) }
+
+    // Auto-prompt permission immediately when reaching Step 3 rather than waiting
+    LaunchedEffect(currentStep, hasPermission) {
+        if (currentStep == 3 && !hasPermission && !hasAutoTriggeredPrompt) {
+            hasAutoTriggeredPrompt = true
+            PermissionUtils.launchUsageAccessPrompt(context)
+        }
+    }
 
     // Re-check permission on resume
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
@@ -106,26 +115,7 @@ fun OnboardingScreen(
                         )
                     }
                 },
-                actions = {
-                    if (currentStep < 3) {
-                        TextButton(
-                            onClick = {
-                                viewModel.completeOnboarding(
-                                    name = enteredName.ifBlank { "Friend" },
-                                    selectedApps = selectedApps,
-                                    defaultGoalMinutes = selectedGoalMinutes
-                                )
-                                onFinish()
-                            }
-                        ) {
-                            Text(
-                                text = "Skip",
-                                color = BrandColors.SlateGray,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                },
+                actions = {},
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandColors.DarkSlateBg)
             )
         }
@@ -198,19 +188,20 @@ fun OnboardingScreen(
                     3 -> StepPermissions(
                         hasPermission = hasPermission,
                         onOpenSettings = {
-                            try {
-                                context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                            } catch (e: Exception) {
-                                // Fallback
-                            }
+                            PermissionUtils.launchUsageAccessPrompt(context)
+                        },
+                        onRefreshPermission = {
+                            hasPermission = viewModel.hasUsageStatsPermission()
                         },
                         onFinish = {
-                            viewModel.completeOnboarding(
-                                name = enteredName.ifBlank { "Friend" },
-                                selectedApps = selectedApps,
-                                defaultGoalMinutes = selectedGoalMinutes
-                            )
-                            onFinish()
+                            if (enteredName.isNotBlank() && hasPermission) {
+                                viewModel.completeOnboarding(
+                                    name = enteredName.trim(),
+                                    selectedApps = selectedApps,
+                                    defaultGoalMinutes = selectedGoalMinutes
+                                )
+                                onFinish()
+                            }
                         },
                         onBack = { currentStep = 2 }
                     )
@@ -226,45 +217,50 @@ private fun StepEnterName(
     onNameChange: (String) -> Unit,
     onNext: () -> Unit
 ) {
+    val isNameValid = name.trim().length >= 2
+
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            // Icon Badge
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
             Box(
                 modifier = Modifier
-                    .size(64.dp)
-                    .background(BrandColors.PrimaryIndigo.copy(alpha = 0.12f), shape = CircleShape),
+                    .size(56.dp)
+                    .background(BrandColors.NeonAmber.copy(alpha = 0.15f), shape = CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.WbSunny,
                     contentDescription = null,
                     tint = BrandColors.NeonAmber,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(30.dp)
                 )
             }
 
-            Text(
-                text = "Welcome to ScreenTime",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Black,
-                color = BrandColors.SoftWhite
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Welcome to ScreenTime",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    color = BrandColors.SoftWhite
+                )
+
+                Text(
+                    text = "Track your daylight screen time and build balanced digital habits.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BrandColors.SlateGray
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "Track your sunlight focus, reclaim wasted hours, and build balanced digital habits.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = BrandColors.SlateGray,
-                lineHeight = 22.sp
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "What is your name?",
-                style = MaterialTheme.typography.titleMedium,
+                text = "What should we call you?",
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = BrandColors.SoftWhite
             )
@@ -272,13 +268,17 @@ private fun StepEnterName(
             OutlinedTextField(
                 value = name,
                 onValueChange = onNameChange,
-                placeholder = { Text("Enter your name (e.g. Alex)") },
+                placeholder = { Text("Your name") },
                 leadingIcon = {
                     Icon(Icons.Default.Person, contentDescription = null, tint = BrandColors.PrimaryIndigo)
                 },
+                supportingText = if (name.isNotBlank() && name.trim().length < 2) {
+                    { Text("At least 2 characters", color = BrandColors.ErrorRose) }
+                } else null,
+                isError = name.isNotBlank() && name.trim().length < 2,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = BrandColors.PrimaryIndigo,
                     unfocusedBorderColor = BrandColors.SlateGray.copy(alpha = 0.3f),
@@ -291,14 +291,26 @@ private fun StepEnterName(
         }
 
         Button(
-            onClick = onNext,
+            onClick = {
+                if (isNameValid) onNext()
+            },
+            enabled = isNameValid,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BrandColors.PrimaryIndigo)
+                .padding(bottom = 8.dp)
+                .height(50.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = BrandColors.PrimaryIndigo,
+                disabledContainerColor = BrandColors.SlateGray.copy(alpha = 0.2f),
+                disabledContentColor = BrandColors.SlateGray
+            )
         ) {
-            Text("Continue", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Text(
+                text = "Continue",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(modifier = Modifier.width(8.dp))
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
         }
@@ -965,6 +977,7 @@ private fun StepSelectGoal(
 private fun StepPermissions(
     hasPermission: Boolean,
     onOpenSettings: () -> Unit,
+    onRefreshPermission: () -> Unit,
     onFinish: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -972,13 +985,16 @@ private fun StepPermissions(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
             Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(56.dp)
                     .background(
                         if (hasPermission) BrandColors.ForestGreen.copy(alpha = 0.15f)
-                        else BrandColors.PrimaryIndigo.copy(alpha = 0.12f),
+                        else BrandColors.PrimaryIndigo.copy(alpha = 0.15f),
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
@@ -987,51 +1003,27 @@ private fun StepPermissions(
                     imageVector = if (hasPermission) Icons.Default.CheckCircle else Icons.Default.Security,
                     contentDescription = null,
                     tint = if (hasPermission) BrandColors.ForestGreen else BrandColors.PrimaryIndigo,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(30.dp)
                 )
             }
 
-            Text(
-                text = if (hasPermission) "You're All Set!" else "Enable Usage Access",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Black,
-                color = BrandColors.SoftWhite
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = if (hasPermission) "Tracking Access Granted" else "Usage Tracking Access",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    color = BrandColors.SoftWhite
+                )
 
-            Text(
-                text = if (hasPermission) {
-                    "Usage Access is already active. ScreenTime is ready to automatically detect your Day Start and track foreground sessions."
-                } else {
-                    "Android requires Usage Access to detect foreground app usage and calculate your real-time day start accurately."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = BrandColors.SlateGray,
-                lineHeight = 22.sp
-            )
-
-            // Privacy guarantee card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
-                shape = RoundedCornerShape(16.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, BrandColors.SlateGray.copy(alpha = 0.12f))
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Lock, contentDescription = null, tint = BrandColors.ForestGreen, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("100% Private & On-Device", fontWeight = FontWeight.Bold, color = BrandColors.SoftWhite, fontSize = 13.sp)
-                    }
-                    Text(
-                        text = "Your usage history is stored entirely in local device storage. No account is required and no analytics are uploaded to the cloud.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = BrandColors.SlateGray
-                    )
-                }
+                Text(
+                    text = if (hasPermission)
+                        "Usage tracking is active. ScreenTime is ready to monitor your screen habits."
+                    else
+                        "Required to track active apps and calculate your daylight focus metrics.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BrandColors.SlateGray,
+                    lineHeight = 20.sp
+                )
             }
 
             if (!hasPermission) {
@@ -1039,29 +1031,43 @@ private fun StepPermissions(
                     onClick = onOpenSettings,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(16.dp),
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandColors.PrimaryIndigo)
                 ) {
-                    Icon(Icons.Default.Settings, contentDescription = null)
+                    Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Grant Usage Access in Settings", fontWeight = FontWeight.Bold)
+                    Text("Grant Usage Access", fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = onRefreshPermission,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BrandColors.SlateGray.copy(alpha = 0.25f))
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, tint = BrandColors.PrimaryIndigo, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Check Status", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = BrandColors.PrimaryIndigo)
                 }
             } else {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = BrandColors.ForestGreen.copy(alpha = 0.1f)),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BrandColors.ForestGreen.copy(alpha = 0.3f))
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
+                            .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = BrandColors.ForestGreen, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Usage Permission Active",
+                            text = "Permission enabled. Ready to proceed!",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = BrandColors.ForestGreen
@@ -1069,33 +1075,68 @@ private fun StepPermissions(
                     }
                 }
             }
+
+            // Compact Privacy Badge
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = BrandColors.SecondaryTeal,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "100% On-Device & Private • No data leaves your phone",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = BrandColors.SlateGray
+                )
+            }
         }
 
+        // Bottom Navigation Bar
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             OutlinedButton(
                 onClick = onBack,
                 modifier = Modifier
                     .weight(1f)
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, BrandColors.SlateGray.copy(alpha = 0.3f))
             ) {
                 Text("Back", color = BrandColors.SoftWhite)
             }
             Button(
                 onClick = onFinish,
+                enabled = hasPermission,
                 modifier = Modifier
                     .weight(2f)
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = BrandColors.PrimaryIndigo)
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = BrandColors.PrimaryIndigo,
+                    disabledContainerColor = BrandColors.SlateGray.copy(alpha = 0.15f),
+                    disabledContentColor = BrandColors.SlateGray
+                )
             ) {
-                Text("Get Started", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text(
+                    text = if (hasPermission) "Get Started" else "Permission Required",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                if (hasPermission) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                }
             }
         }
     }

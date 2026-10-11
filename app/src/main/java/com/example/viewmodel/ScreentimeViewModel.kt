@@ -6,8 +6,11 @@ import android.app.NotificationManager
 import android.app.AppOpsManager
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
+import android.app.usage.UsageEvents
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -24,6 +27,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.*
+
+enum class DayStartTriggerMode {
+    FIRST_MONITORED_APP,
+    FIRST_PHONE_UNLOCK
+}
 
 class ScreentimeViewModel(
     application: Application,
@@ -118,6 +126,11 @@ class ScreentimeViewModel(
     private val _dayStartTimestamp = MutableStateFlow<Long?>(null)
     val dayStartTimestamp: StateFlow<Long?> = _dayStartTimestamp.asStateFlow()
 
+    private val _dayStartTriggerMode = MutableStateFlow<DayStartTriggerMode>(DayStartTriggerMode.FIRST_PHONE_UNLOCK)
+    val dayStartTriggerMode: StateFlow<DayStartTriggerMode> = _dayStartTriggerMode.asStateFlow()
+
+    private var unlockReceiver: BroadcastReceiver? = null
+
     // User Profile & Onboarding states
     private val _userName = MutableStateFlow<String>("")
     val userName: StateFlow<String> = _userName.asStateFlow()
@@ -143,6 +156,13 @@ class ScreentimeViewModel(
         val sharedPrefs = getApplication<Application>().getSharedPreferences("screentime_prefs", Context.MODE_PRIVATE)
         _userName.value = sharedPrefs.getString("user_name", "") ?: ""
         _onboardingCompleted.value = sharedPrefs.getBoolean("onboarding_completed", false)
+        val savedModeStr = sharedPrefs.getString("day_start_trigger_mode", DayStartTriggerMode.FIRST_PHONE_UNLOCK.name)
+        _dayStartTriggerMode.value = try {
+            DayStartTriggerMode.valueOf(savedModeStr ?: DayStartTriggerMode.FIRST_PHONE_UNLOCK.name)
+        } catch (_: Exception) {
+            DayStartTriggerMode.FIRST_PHONE_UNLOCK
+        }
+        registerUnlockReceiver()
         _tickerNotificationEnabled.value = sharedPrefs.getBoolean("ticker_notification_enabled", true)
         _systemNotificationEnabled.value = sharedPrefs.getBoolean("system_notification_enabled", true)
         
@@ -829,13 +849,85 @@ class ScreentimeViewModel(
         }
     }
 
-    fun updateDayStartTimestamp(sessions: List<UsageSession>, todaysUsages: List<DailyUsageEntity>) {
-        val totalTodaySeconds = todaysUsages.sumOf { it.usageSeconds }
-        if (totalTodaySeconds == 0L && sessions.isEmpty()) {
-            _dayStartTimestamp.value = null
-            return
-        }
+    fun setDayStartTriggerMode(mode: DayStartTriggerMode) {
+        _dayStartTriggerMode.value = mode
+        val sharedPrefs = getApplication<Application>().getSharedPreferences("screentime_prefs", Context.MODE_PRIVATE)
+        sharedPrefs.edit().putString("day_start_trigger_mode", mode.name).apply()
+        refreshDayStart()
+    }
 
+    fun refreshDayStart() {
+        val sessions = _allPlatformsTodaySessions.value
+        val todaysUsages = allUsage.value.filter { it.date == _currentDate.value }
+        updateDayStartTimestamp(sessions, todaysUsages)
+    }
+
+    fun queryFirstUnlockSinceMidnight(context: Context): Long? {
+        if (!hasUsageStatsPermission()) return null
+        return try {
+            val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as? UsageStatsManager ?: return null
+            val calendar = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val midnight = calendar.timeInMillis
+            val now = System.currentTimeMillis()
+
+            val events = usageStatsManager.queryEvents(midnight, now)
+            val event = UsageEvents.Event()
+            var earliestUnlock: Long? = null
+
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                // Event 16 = KEYGUARD_HIDDEN (Lockscreen unlocked), Event 15 = SCREEN_INTERACTIVE
+                if ((event.eventType == 16 || event.eventType == 15) && event.timeStamp >= midnight) {
+                    if (earliestUnlock == null || event.timeStamp < earliestUnlock) {
+                        earliestUnlock = event.timeStamp
+                    }
+                }
+            }
+            earliestUnlock
+        } catch (e: Exception) {
+            Log.e(TAG, "Error querying unlock events: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun registerUnlockReceiver() {
+        if (unlockReceiver == null) {
+            unlockReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    if (intent.action == Intent.ACTION_USER_PRESENT) {
+                        recordRealtimeUnlock(System.currentTimeMillis())
+                    }
+                }
+            }
+            try {
+                val filter = IntentFilter(Intent.ACTION_USER_PRESENT)
+                getApplication<Application>().registerReceiver(unlockReceiver, filter)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error registering unlock receiver: ${e.message}", e)
+            }
+        }
+    }
+
+    fun recordRealtimeUnlock(timestamp: Long) {
+        val context = getApplication<Application>()
+        val todayStr = _currentDate.value
+        val sharedPrefs = context.getSharedPreferences("screentime_prefs", Context.MODE_PRIVATE)
+        val key = "first_unlock_ts_$todayStr"
+        if (!sharedPrefs.contains(key)) {
+            sharedPrefs.edit().putLong(key, timestamp).apply()
+            Log.d(TAG, "Recorded real-time first unlock for $todayStr: $timestamp")
+        }
+        if (_dayStartTriggerMode.value == DayStartTriggerMode.FIRST_PHONE_UNLOCK) {
+            refreshDayStart()
+        }
+    }
+
+    fun updateDayStartTimestamp(sessions: List<UsageSession>, todaysUsages: List<DailyUsageEntity>) {
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -843,8 +935,41 @@ class ScreentimeViewModel(
             set(Calendar.MILLISECOND, 0)
         }
         val todayMidnight = calendar.timeInMillis
+        val context = getApplication<Application>()
+        val todayStr = _currentDate.value
 
-        // Find earliest session that touched today (at or after 00:00:00)
+        if (_dayStartTriggerMode.value == DayStartTriggerMode.FIRST_PHONE_UNLOCK) {
+            // Option 2: First Phone Unlock
+            // 1. Check real-time saved unlock timestamp (Method 2: Broadcast)
+            val sharedPrefs = context.getSharedPreferences("screentime_prefs", Context.MODE_PRIVATE)
+            val savedUnlockTs = sharedPrefs.getLong("first_unlock_ts_$todayStr", 0L)
+
+            // 2. Query UsageStatsManager (Method 1: Historical / Retrospective)
+            val historicalUnlockTs = queryFirstUnlockSinceMidnight(context)
+
+            val candidateUnlock = when {
+                savedUnlockTs >= todayMidnight && historicalUnlockTs != null -> minOf(savedUnlockTs, historicalUnlockTs)
+                savedUnlockTs >= todayMidnight -> savedUnlockTs
+                historicalUnlockTs != null && historicalUnlockTs >= todayMidnight -> historicalUnlockTs
+                else -> null
+            }
+
+            if (candidateUnlock != null && candidateUnlock >= todayMidnight) {
+                if (savedUnlockTs == 0L) {
+                    sharedPrefs.edit().putLong("first_unlock_ts_$todayStr", candidateUnlock).apply()
+                }
+                _dayStartTimestamp.value = candidateUnlock
+                return
+            }
+        }
+
+        // Option 1 (or fallback if no unlock detected yet): First Monitored App Session
+        val totalTodaySeconds = todaysUsages.sumOf { it.usageSeconds }
+        if (totalTodaySeconds == 0L && sessions.isEmpty()) {
+            _dayStartTimestamp.value = null
+            return
+        }
+
         val validTodaySessions = sessions.filter { it.endTime > todayMidnight }
         val earliestSession = validTodaySessions.minByOrNull { it.startTime }
 
@@ -1223,6 +1348,10 @@ class ScreentimeViewModel(
 
     fun completeOnboarding(name: String, selectedApps: Map<String, String>, defaultGoalMinutes: Long = 120L) {
         val trimmed = name.trim()
+        if (trimmed.isBlank() || !hasUsageStatsPermission()) {
+            Log.w(TAG, "Cannot complete onboarding: username must be provided and real-time tracking permission must be granted")
+            return
+        }
         val context = getApplication<Application>()
         val sharedPrefs = context.getSharedPreferences("screentime_prefs", Context.MODE_PRIVATE)
         val editor = sharedPrefs.edit()
@@ -1258,6 +1387,13 @@ class ScreentimeViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        unlockReceiver?.let {
+            try {
+                getApplication<Application>().unregisterReceiver(it)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to unregister unlockReceiver in onCleared: ${e.message}", e)
+            }
+        }
         dateChangeReceiver?.let {
             try {
                 getApplication<Application>().unregisterReceiver(it)

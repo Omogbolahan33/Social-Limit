@@ -1,7 +1,9 @@
 package com.example.ui.components
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +27,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.clickable
 import java.util.Locale
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GoalsScreen(
     viewModel: ScreentimeViewModel,
@@ -33,6 +36,8 @@ fun GoalsScreen(
     val goalList by viewModel.allGoals.collectAsState()
     var showAddGoalDialog by remember { mutableStateOf(false) }
     var showManageAppsDialog by remember { mutableStateOf(false) }
+    var editingGoal by remember { mutableStateOf<PlatformGoalEntity?>(null) }
+    var optionsGoal by remember { mutableStateOf<PlatformGoalEntity?>(null) }
 
     Box(modifier = modifier.fillMaxSize()) {
         if (goalList.isEmpty()) {
@@ -102,17 +107,21 @@ fun GoalsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             Text(
                                 text = "Your platform limits",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = BrandColors.SoftWhite
                             )
-                            Text(
-                                text = "Exceeding these limits triggers immediate alerts.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = BrandColors.SlateGray,
+                            Spacer(modifier = Modifier.width(6.dp))
+                            HelpIconButton(
+                                title = "Platform Limits",
+                                helpText = "Configure daily screen time limits for monitored apps. When a limit is reached, ScreenTime delivers real-time notifications and alerts.",
+                                isWarning = true
                             )
                         }
 
@@ -136,7 +145,14 @@ fun GoalsScreen(
                     val color = BrandColors.getPlatformColor(goal.platform)
                     Card(
                         colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .combinedClickable(
+                                onClick = { editingGoal = goal },
+                                onLongClick = { optionsGoal = goal }
+                            )
                     ) {
                         Row(
                             modifier = Modifier
@@ -186,17 +202,6 @@ fun GoalsScreen(
                                     uncheckedTrackColor = BrandColors.SlateGray.copy(alpha = 0.2f)
                                 )
                             )
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            // Delete Goal icon
-                            IconButton(onClick = { viewModel.deleteGoal(goal) }) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete",
-                                    tint = BrandColors.ErrorRose.copy(alpha = 0.8f)
-                                )
-                            }
                         }
                     }
                 }
@@ -311,6 +316,192 @@ fun GoalsScreen(
                 }
             }
         )
+    }
+
+    if (editingGoal != null) {
+        val target = editingGoal!!
+        var editHour by remember(target) { mutableStateOf((target.dailyLimitMinutes / 60).toInt()) }
+        var editMinute by remember(target) { mutableStateOf((target.dailyLimitMinutes % 60).toInt()) }
+
+        AlertDialog(
+            onDismissRequest = { editingGoal = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PlatformAppIcon(platformName = target.platform, size = 28.dp)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Edit Limit: ${target.platform}", fontWeight = FontWeight.Bold, color = BrandColors.SoftWhite)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(
+                        text = "Adjust the maximum daily screen time allowed for ${target.platform}.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BrandColors.SlateGray
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Duration (Hours & Minutes):", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = BrandColors.SoftWhite)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        TimeRollingPicker(
+                            selectedHour = editHour,
+                            selectedMinute = editMinute,
+                            onTimeChanged = { h, m ->
+                                editHour = h
+                                editMinute = m
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val totalMins = (editHour * 60L) + editMinute
+                        viewModel.saveGoal(target.platform, totalMins.coerceAtLeast(1L))
+                        editingGoal = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandColors.PrimaryIndigo),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Save Limit", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingGoal = null }) {
+                    Text("Cancel", color = BrandColors.SlateGray)
+                }
+            },
+            containerColor = BrandColors.TonalSurface,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    if (optionsGoal != null) {
+        val targetGoal = optionsGoal!!
+        var showDeleteConfirm by remember { mutableStateOf(false) }
+
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { 
+                    showDeleteConfirm = false 
+                    optionsGoal = null
+                },
+                title = { Text("Delete Platform Limit", fontWeight = FontWeight.Bold, color = BrandColors.SoftWhite) },
+                text = { Text("Are you sure you want to remove the daily limit for ${targetGoal.platform}?", color = BrandColors.SlateGray) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.deleteGoal(targetGoal)
+                            showDeleteConfirm = false
+                            optionsGoal = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandColors.ErrorRose),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Delete", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) {
+                        Text("Cancel", color = BrandColors.SlateGray)
+                    }
+                },
+                containerColor = BrandColors.TonalSurface,
+                shape = RoundedCornerShape(16.dp)
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { optionsGoal = null },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PlatformAppIcon(platformName = targetGoal.platform, size = 32.dp)
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(targetGoal.platform, fontWeight = FontWeight.Bold, color = BrandColors.SoftWhite)
+                            val h = targetGoal.dailyLimitMinutes / 60
+                            val m = targetGoal.dailyLimitMinutes % 60
+                            val limitStr = if (targetGoal.dailyLimitMinutes >= 60) {
+                                String.format(Locale.getDefault(), "%02d:%02d", h, m)
+                            } else {
+                                "${targetGoal.dailyLimitMinutes}m"
+                            }
+                            Text("Limit: $limitStr", fontSize = 12.sp, color = BrandColors.SecondaryTeal, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Edit option
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    val toEdit = targetGoal
+                                    optionsGoal = null
+                                    editingGoal = toEdit
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = BrandColors.PrimaryIndigo)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Edit Daily Limit", fontWeight = FontWeight.SemiBold, color = BrandColors.SoftWhite)
+                        }
+
+                        // Toggle active state
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    viewModel.toggleGoalEnabled(targetGoal, !targetGoal.isEnabled)
+                                    optionsGoal = null
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                if (targetGoal.isEnabled) Icons.Default.Block else Icons.Default.CheckCircle, 
+                                contentDescription = null, 
+                                tint = if (targetGoal.isEnabled) BrandColors.SlateGray else BrandColors.ForestGreen
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                if (targetGoal.isEnabled) "Disable Limit" else "Enable Limit", 
+                                fontWeight = FontWeight.SemiBold, 
+                                color = BrandColors.SoftWhite
+                            )
+                        }
+
+                        // Delete option
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    showDeleteConfirm = true
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, tint = BrandColors.ErrorRose)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Delete Limit", fontWeight = FontWeight.SemiBold, color = BrandColors.ErrorRose)
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { optionsGoal = null }) {
+                        Text("Close", color = BrandColors.SlateGray)
+                    }
+                },
+                containerColor = BrandColors.TonalSurface,
+                shape = RoundedCornerShape(20.dp)
+            )
+        }
     }
 
     if (showManageAppsDialog) {

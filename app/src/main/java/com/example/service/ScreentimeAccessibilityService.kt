@@ -284,6 +284,13 @@ class ScreentimeAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         stopTicker()
+        unlockReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (e: Exception) {
+                Log.e("ScreentimeAccessibility", "Error unregistering unlock receiver", e)
+            }
+        }
         super.onDestroy()
     }
 
@@ -535,6 +542,45 @@ class ScreentimeAccessibilityService : AccessibilityService() {
             } catch (e: Exception) {
                 Log.e("ScreentimeAccessibility", "Error logging session trace to DB", e)
             }
+        }
+    }
+
+    private var unlockReceiver: android.content.BroadcastReceiver? = null
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        registerUnlockReceiver()
+    }
+
+    private fun registerUnlockReceiver() {
+        if (unlockReceiver == null) {
+            unlockReceiver = object : android.content.BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    if (intent.action == Intent.ACTION_USER_PRESENT) {
+                        recordFirstUnlock(System.currentTimeMillis())
+                    }
+                }
+            }
+            try {
+                val filter = android.content.IntentFilter(Intent.ACTION_USER_PRESENT)
+                registerReceiver(unlockReceiver, filter)
+            } catch (e: Exception) {
+                Log.e("ScreentimeAccessibility", "Error registering unlock receiver", e)
+            }
+        }
+    }
+
+    private fun recordFirstUnlock(timestamp: Long) {
+        try {
+            val sharedPrefs = getSharedPreferences("screentime_prefs", Context.MODE_PRIVATE)
+            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(timestamp))
+            val key = "first_unlock_ts_$todayStr"
+            if (!sharedPrefs.contains(key)) {
+                sharedPrefs.edit().putLong(key, timestamp).apply()
+                Log.d("ScreentimeAccessibility", "Recorded live first phone unlock in service: $todayStr -> $timestamp")
+            }
+        } catch (e: Exception) {
+            Log.e("ScreentimeAccessibility", "Error saving unlock in service", e)
         }
     }
 }

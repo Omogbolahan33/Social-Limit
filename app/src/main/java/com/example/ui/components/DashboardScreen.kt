@@ -237,18 +237,14 @@ fun DashboardScreen(
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = {
-                                try {
-                                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                                } catch (e: Exception) {
-                                    // Fallback if settings page fails to launch
-                                }
+                                PermissionUtils.launchUsageAccessPrompt(context)
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings", modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Security, contentDescription = "Security", modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Grant Usage Permission", fontSize = 13.sp)
+                            Text("Allow Usage Access", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

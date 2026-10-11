@@ -7,8 +7,12 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -58,7 +62,28 @@ fun BlockScreen(
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Screen Tab Header
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "BLOCKS & FOCUS SHIELD",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                color = BrandColors.SoftWhite,
+                letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            HelpIconButton(
+                title = "Blocks & Focus Shield",
+                helpText = "• Schedules: Create recurring time blocks (e.g. work hours or bedtime) where targeted apps cannot open.\n\n• Throttling: Enforce mandatory cool-off breaks after continuous non-stop usage stretches to stop doomscrolling.\n\n• Pomodoro: Start an immediate lock sprint (15-60 mins) to lock distracting apps and focus."
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Dynamic Setup Assistant Header
         if (!isAccessibilityAndBlockerEnabled) {
@@ -158,78 +183,44 @@ fun AppThrottlingTabContent(viewModel: ScreentimeViewModel) {
     }
 
     LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(bottom = 80.dp),
         modifier = Modifier.fillMaxSize()
     ) {
-        // Concept Hero Card (Beer Parlor Cut-off style)
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = BrandColors.SolarAmber.copy(alpha = 0.08f)),
-                border = BorderStroke(1.dp, BrandColors.SolarAmber.copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(BrandColors.SolarAmber.copy(alpha = 0.2f), shape = CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.HourglassBottom,
-                            contentDescription = null,
-                            tint = BrandColors.SolarAmber,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "CONTINUOUS USAGE CUT-OFF",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BrandColors.SolarAmber,
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp
-                        )
-                        Text(
-                            text = "Like being cut off at a beer parlor, using a monitored app non-stop for an extended stretch will lock the app until you complete a mandatory cool-off break.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = BrandColors.SoftWhite.copy(alpha = 0.9f),
-                            lineHeight = 18.sp
-                        )
-                    }
-                }
-            }
-        }
-
-        // Master Switch Card
+        // Master Toggle Card
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, BrandColors.SlateGray.copy(alpha = 0.12f))
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(BrandColors.SolarAmber.copy(alpha = 0.15f), shape = CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.HourglassBottom,
+                                contentDescription = null,
+                                tint = BrandColors.SolarAmber,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "Enable App Throttling",
+                            text = "Continuous Use Throttling",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = BrandColors.SoftWhite
-                        )
-                        Text(
-                            text = if (throttleEnabled) "Cut-off and cool-off active on monitored apps" else "Throttling is turned off",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = BrandColors.SlateGray
                         )
                     }
                     Switch(
@@ -237,157 +228,143 @@ fun AppThrottlingTabContent(viewModel: ScreentimeViewModel) {
                         onCheckedChange = { viewModel.setThrottleEnabled(it) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = BrandColors.SoftWhite,
-                            checkedTrackColor = BrandColors.SolarAmber
+                            checkedTrackColor = BrandColors.SolarAmber,
+                            uncheckedThumbColor = BrandColors.SlateGray,
+                            uncheckedTrackColor = BrandColors.TonalSurface
                         )
                     )
                 }
             }
         }
 
-        // Configuration Section (Visible when enabled)
+        // Configuration Panel (Visible when enabled)
         if (throttleEnabled) {
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, BrandColors.SlateGray.copy(alpha = 0.12f))
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // 1. Duration before cut-off
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
+                        // 1. Max Continuous Stretch
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = "Duration Before Cut-Off",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
+                                    text = "Max Continuous Stretch",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = BrandColors.SoftWhite
                                 )
                                 Text(
-                                    text = "Max non-stop continuous usage stretch",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = BrandColors.SlateGray
+                                    text = "$maxContinuousMinutes min",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = BrandColors.SolarAmber
                                 )
                             }
-                            Text(
-                                text = "$maxContinuousMinutes min",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Black,
-                                color = BrandColors.SolarAmber
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Slider(
+                                value = maxContinuousMinutes.toFloat(),
+                                onValueChange = { viewModel.setThrottleMaxContinuousMinutes(it.toInt()) },
+                                valueRange = 5f..90f,
+                                steps = 16,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = BrandColors.SolarAmber,
+                                    activeTrackColor = BrandColors.SolarAmber,
+                                    inactiveTrackColor = BrandColors.DarkSlateBg
+                                )
                             )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Slider(
-                            value = maxContinuousMinutes.toFloat(),
-                            onValueChange = { viewModel.setThrottleMaxContinuousMinutes(it.toInt()) },
-                            valueRange = 5f..90f,
-                            steps = 16,
-                            colors = SliderDefaults.colors(
-                                thumbColor = BrandColors.SolarAmber,
-                                activeTrackColor = BrandColors.SolarAmber
-                            )
-                        )
-
-                        // Quick preset chips for cut-off
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf(10, 15, 20, 30, 45).forEach { preset ->
-                                val isSelected = maxContinuousMinutes == preset
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (isSelected) BrandColors.SolarAmber else BrandColors.DarkSlateBg)
-                                        .clickable { viewModel.setThrottleMaxContinuousMinutes(preset) }
-                                        .padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "${preset}m",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isSelected) BrandColors.DarkSlateBg else BrandColors.SlateGray
-                                    )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(10, 15, 20, 30, 45).forEach { preset ->
+                                    val isSelected = maxContinuousMinutes == preset
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSelected) BrandColors.SolarAmber else BrandColors.DarkSlateBg)
+                                            .clickable { viewModel.setThrottleMaxContinuousMinutes(preset) }
+                                            .padding(vertical = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "${preset}m",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) BrandColors.DarkSlateBg else BrandColors.SlateGray
+                                        )
+                                    }
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(20.dp))
-                        HorizontalDivider(color = BrandColors.SlateGray.copy(alpha = 0.15f))
-                        Spacer(modifier = Modifier.height(16.dp))
+                        HorizontalDivider(color = BrandColors.SlateGray.copy(alpha = 0.12f))
 
-                        // 2. Cool-off period
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
+                        // 2. Mandatory Cool-Off Break
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = "Mandatory Cool-Off Period",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
+                                    text = "Mandatory Cool-Off Break",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
                                     color = BrandColors.SoftWhite
                                 )
                                 Text(
-                                    text = "Time away required before you can resume",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = BrandColors.SlateGray
+                                    text = "$cooloffMinutes min",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = BrandColors.PrimaryIndigo
                                 )
                             }
-                            Text(
-                                text = "$cooloffMinutes min",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Black,
-                                color = BrandColors.PrimaryIndigo
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Slider(
+                                value = cooloffMinutes.toFloat(),
+                                onValueChange = { viewModel.setThrottleCooloffMinutes(it.toInt()) },
+                                valueRange = 2f..45f,
+                                steps = 14,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = BrandColors.PrimaryIndigo,
+                                    activeTrackColor = BrandColors.PrimaryIndigo,
+                                    inactiveTrackColor = BrandColors.DarkSlateBg
+                                )
                             )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Slider(
-                            value = cooloffMinutes.toFloat(),
-                            onValueChange = { viewModel.setThrottleCooloffMinutes(it.toInt()) },
-                            valueRange = 2f..45f,
-                            steps = 14,
-                            colors = SliderDefaults.colors(
-                                thumbColor = BrandColors.PrimaryIndigo,
-                                activeTrackColor = BrandColors.PrimaryIndigo
-                            )
-                        )
-
-                        // Quick preset chips for cool-off
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf(5, 10, 15, 20, 30).forEach { preset ->
-                                val isSelected = cooloffMinutes == preset
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (isSelected) BrandColors.PrimaryIndigo else BrandColors.DarkSlateBg)
-                                        .clickable { viewModel.setThrottleCooloffMinutes(preset) }
-                                        .padding(vertical = 6.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "${preset}m",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isSelected) BrandColors.SoftWhite else BrandColors.SlateGray
-                                    )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                listOf(5, 10, 15, 20, 30).forEach { preset ->
+                                    val isSelected = cooloffMinutes == preset
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSelected) BrandColors.PrimaryIndigo else BrandColors.DarkSlateBg)
+                                            .clickable { viewModel.setThrottleCooloffMinutes(preset) }
+                                            .padding(vertical = 6.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "${preset}m",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) BrandColors.SoftWhite else BrandColors.SlateGray
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -395,73 +372,18 @@ fun AppThrottlingTabContent(viewModel: ScreentimeViewModel) {
                 }
             }
 
-            // Summary Info Pill
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface.copy(alpha = 0.5f)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = BrandColors.SlateGray,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "Rule: Using any monitored app for $maxContinuousMinutes minutes non-stop cuts you off for a mandatory $cooloffMinutes-minute cool-off period.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = BrandColors.SlateGray
-                        )
-                    }
-                }
-            }
-
-            // Active Throttled Cool-Offs Section
-            item {
-                Text(
-                    text = "Active Throttled Cool-Offs",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = BrandColors.SoftWhite,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-
-            if (activeCooloffs.isEmpty()) {
+            // Active Throttled Cool-Offs Section (Shown only if apps are currently cut off)
+            if (activeCooloffs.isNotEmpty()) {
                 item {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = BrandColors.ForestGreen,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "No apps are currently throttled. Continuous session counters are actively monitoring in the background.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = BrandColors.SlateGray
-                            )
-                        }
-                    }
+                    Text(
+                        text = "Active Cool-Offs",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandColors.SolarAmber,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
-            } else {
+
                 items(activeCooloffs.entries.toList()) { (platform, secondsLeft) ->
                     val mins = secondsLeft / 60
                     val secs = secondsLeft % 60
@@ -473,12 +395,12 @@ fun AppThrottlingTabContent(viewModel: ScreentimeViewModel) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(14.dp),
+                                .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                PlatformAppIcon(platformName = platform, size = 36.dp)
+                                PlatformAppIcon(platformName = platform, size = 32.dp)
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
@@ -488,7 +410,7 @@ fun AppThrottlingTabContent(viewModel: ScreentimeViewModel) {
                                         color = BrandColors.SoftWhite
                                     )
                                     Text(
-                                        text = String.format(Locale.getDefault(), "Cool-Off: %02d:%02d remaining", mins, secs),
+                                        text = String.format(Locale.getDefault(), "%02d:%02d remaining", mins, secs),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = BrandColors.SolarAmber,
                                         fontWeight = FontWeight.Bold
@@ -500,9 +422,9 @@ fun AppThrottlingTabContent(viewModel: ScreentimeViewModel) {
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandColors.SolarAmber),
                                 shape = RoundedCornerShape(8.dp),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                modifier = Modifier.height(32.dp)
+                                modifier = Modifier.height(30.dp)
                             ) {
-                                Text("Reset", fontSize = 11.sp)
+                                Text("Reset", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -568,11 +490,13 @@ fun AccessibilityAssistCard(onEnableClick: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun BlockSchedulesTabContent(viewModel: ScreentimeViewModel) {
     val scheduleList by viewModel.allSchedules.collectAsState()
     var showAddBlockDialog by remember { mutableStateOf(false) }
+    var editingSchedule by remember { mutableStateOf<BlockScheduleEntity?>(null) }
+    var optionsSchedule by remember { mutableStateOf<BlockScheduleEntity?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (scheduleList.isEmpty()) {
@@ -621,12 +545,7 @@ fun BlockSchedulesTabContent(viewModel: ScreentimeViewModel) {
                         text = "Focus Schedule Blocks",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = BrandColors.SoftWhite
-                    )
-                    Text(
-                        text = "Targeted apps are actively locked during scheduled working periods.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = BrandColors.SlateGray,
+                        color = BrandColors.SoftWhite,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
@@ -634,7 +553,14 @@ fun BlockSchedulesTabContent(viewModel: ScreentimeViewModel) {
                 items(scheduleList) { schedule ->
                     Card(
                         colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .combinedClickable(
+                                onClick = { editingSchedule = schedule },
+                                onLongClick = { optionsSchedule = schedule }
+                            )
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(
@@ -647,7 +573,7 @@ fun BlockSchedulesTabContent(viewModel: ScreentimeViewModel) {
                                         .size(36.dp)
                                         .background(
                                             if (schedule.isEnabled) BrandColors.PrimaryIndigo.copy(alpha = 0.15f) 
-                                            else BrandColors.SlateGray.copy(alpha = 0.15f), 
+                                             else BrandColors.SlateGray.copy(alpha = 0.15f), 
                                             shape = CircleShape
                                         )
                                 ) {
@@ -697,16 +623,6 @@ fun BlockSchedulesTabContent(viewModel: ScreentimeViewModel) {
                                         uncheckedTrackColor = BrandColors.SlateGray.copy(alpha = 0.2f)
                                     )
                                 )
-
-                                Spacer(modifier = Modifier.width(8.dp))
-
-                                IconButton(onClick = { viewModel.deleteSchedule(schedule) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete",
-                                        tint = BrandColors.ErrorRose.copy(alpha = 0.8f)
-                                    )
-                                }
                             }
 
                             Spacer(modifier = Modifier.height(12.dp))
@@ -774,107 +690,306 @@ fun BlockSchedulesTabContent(viewModel: ScreentimeViewModel) {
     }
 
     if (showAddBlockDialog) {
-        var labelInput by remember { mutableStateOf("Study Session") }
-        var startTimeInput by remember { mutableStateOf("09:00") }
-        var endTimeInput by remember { mutableStateOf("17:00") }
-        
-        val platformChoices = listOf("Instagram", "TikTok", "YouTube", "Twitter/X", "Facebook", "LinkedIn", "WhatsApp")
-        val blockedPlatformsState = remember { mutableStateMapOf<String, Boolean>().apply {
-            platformChoices.forEach { put(it, true) }
-        }}
-
-        AlertDialog(
-            onDismissRequest = { showAddBlockDialog = false },
-            title = { Text("Configure Focus Block") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Designate focused intervals to dynamically block access to selected distraction apps.")
-
-                    OutlinedTextField(
-                        value = labelInput,
-                        onValueChange = { labelInput = it },
-                        label = { Text("Block Schedule Title") },
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = startTimeInput,
-                            onValueChange = { startTimeInput = it },
-                            label = { Text("Start (HH:MM)") },
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = endTimeInput,
-                            onValueChange = { endTimeInput = it },
-                            label = { Text("End (HH:MM)") },
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Text("Selected Blocker Apps:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = BrandColors.SoftWhite)
-                    
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        platformChoices.forEach { platform ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { blockedPlatformsState[platform] = !(blockedPlatformsState[platform] ?: false) }
-                                    .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = blockedPlatformsState[platform] ?: false,
-                                    onCheckedChange = { blockedPlatformsState[platform] = it },
-                                    colors = CheckboxDefaults.colors(checkedColor = BrandColors.PrimaryIndigo)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                PlatformAppIcon(
-                                    platformName = platform,
-                                    size = 20.dp,
-                                    clipShape = RoundedCornerShape(4.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(platform, color = BrandColors.SoftWhite, fontSize = 14.sp)
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val serialized = blockedPlatformsState.filter { it.value }.keys.joinToString(",")
-                        val entity = BlockScheduleEntity(
-                            label = labelInput,
-                            startTime = startTimeInput,
-                            endTime = endTimeInput,
-                            blockedPlatforms = serialized,
-                            isEnabled = true
-                        )
-                        viewModel.saveSchedule(entity)
-                        showAddBlockDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandColors.PrimaryIndigo)
-                ) {
-                    Text("Save Block")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showAddBlockDialog = false }) {
-                    Text("Cancel")
-                }
+        BlockScheduleConfigDialog(
+            scheduleToEdit = null,
+            viewModel = viewModel,
+            onDismiss = { showAddBlockDialog = false },
+            onSave = { entity ->
+                viewModel.saveSchedule(entity)
+                showAddBlockDialog = false
             }
         )
     }
+
+    if (editingSchedule != null) {
+        BlockScheduleConfigDialog(
+            scheduleToEdit = editingSchedule,
+            viewModel = viewModel,
+            onDismiss = { editingSchedule = null },
+            onSave = { updatedEntity ->
+                viewModel.saveSchedule(updatedEntity)
+                editingSchedule = null
+            }
+        )
+    }
+
+    if (optionsSchedule != null) {
+        val targetSchedule = optionsSchedule!!
+        var showDeleteConfirm by remember { mutableStateOf(false) }
+
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { 
+                    showDeleteConfirm = false 
+                    optionsSchedule = null
+                },
+                title = { Text("Delete Focus Block", fontWeight = FontWeight.Bold, color = BrandColors.SoftWhite) },
+                text = { Text("Are you sure you want to permanently delete \"${targetSchedule.label}\"?", color = BrandColors.SlateGray) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.deleteSchedule(targetSchedule)
+                            showDeleteConfirm = false
+                            optionsSchedule = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandColors.ErrorRose),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Delete", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) {
+                        Text("Cancel", color = BrandColors.SlateGray)
+                    }
+                },
+                containerColor = BrandColors.TonalSurface,
+                shape = RoundedCornerShape(16.dp)
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { optionsSchedule = null },
+                title = {
+                    Column {
+                        Text(targetSchedule.label, fontWeight = FontWeight.Bold, color = BrandColors.SoftWhite)
+                        Text(
+                            text = "${targetSchedule.startTime} - ${targetSchedule.endTime}",
+                            fontSize = 12.sp,
+                            color = BrandColors.SecondaryTeal,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Edit option
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    val toEdit = targetSchedule
+                                    optionsSchedule = null
+                                    editingSchedule = toEdit
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, tint = BrandColors.PrimaryIndigo)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Edit Focus Block", fontWeight = FontWeight.SemiBold, color = BrandColors.SoftWhite)
+                        }
+
+                        // Toggle active state
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    viewModel.toggleScheduleEnabled(targetSchedule, !targetSchedule.isEnabled)
+                                    optionsSchedule = null
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                if (targetSchedule.isEnabled) Icons.Default.Block else Icons.Default.CheckCircle, 
+                                contentDescription = null, 
+                                tint = if (targetSchedule.isEnabled) BrandColors.SlateGray else BrandColors.ForestGreen
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                if (targetSchedule.isEnabled) "Turn Off Schedule" else "Turn On Schedule", 
+                                fontWeight = FontWeight.SemiBold, 
+                                color = BrandColors.SoftWhite
+                            )
+                        }
+
+                        // Delete option
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    showDeleteConfirm = true
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, tint = BrandColors.ErrorRose)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Delete Schedule", fontWeight = FontWeight.SemiBold, color = BrandColors.ErrorRose)
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { optionsSchedule = null }) {
+                        Text("Close", color = BrandColors.SlateGray)
+                    }
+                },
+                containerColor = BrandColors.TonalSurface,
+                shape = RoundedCornerShape(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun BlockScheduleConfigDialog(
+    scheduleToEdit: BlockScheduleEntity? = null,
+    viewModel: ScreentimeViewModel,
+    onDismiss: () -> Unit,
+    onSave: (BlockScheduleEntity) -> Unit
+) {
+    val isEditing = scheduleToEdit != null
+    var labelInput by remember { mutableStateOf(scheduleToEdit?.label ?: "Study Session") }
+    var startTimeInput by remember { mutableStateOf(scheduleToEdit?.startTime ?: "09:00") }
+    var endTimeInput by remember { mutableStateOf(scheduleToEdit?.endTime ?: "17:00") }
+
+    val defaultPlatforms = listOf("Instagram", "TikTok", "YouTube", "Twitter/X", "Facebook", "LinkedIn", "WhatsApp")
+    val allPlatforms = remember {
+        val list = defaultPlatforms.toMutableList()
+        for (custom in viewModel.getCustomMonitoredPlatforms()) {
+            if (!list.contains(custom)) list.add(custom)
+        }
+        list
+    }
+
+    val initialSelected = remember {
+        if (scheduleToEdit != null) {
+            scheduleToEdit.blockedPlatforms.split(",").filter { it.isNotBlank() }.toSet()
+        } else {
+            allPlatforms.toSet()
+        }
+    }
+
+    val blockedPlatformsState = remember {
+        mutableStateMapOf<String, Boolean>().apply {
+            allPlatforms.forEach { put(it, initialSelected.contains(it)) }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = if (isEditing) "Edit Focus Block" else "Configure Focus Block",
+                fontWeight = FontWeight.Bold,
+                color = BrandColors.SoftWhite
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Designate focused intervals to dynamically block access to selected distraction apps.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BrandColors.SlateGray
+                )
+
+                OutlinedTextField(
+                    value = labelInput,
+                    onValueChange = { labelInput = it },
+                    label = { Text("Block Schedule Title") },
+                    placeholder = { Text("e.g. Work, Study, Night Sleep") },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = startTimeInput,
+                        onValueChange = { startTimeInput = it },
+                        label = { Text("Start (HH:MM)") },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = endTimeInput,
+                        onValueChange = { endTimeInput = it },
+                        label = { Text("End (HH:MM)") },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                Text(
+                    text = "Selected Blocker Apps:",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = BrandColors.SoftWhite
+                )
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    allPlatforms.forEach { platform ->
+                        val isChecked = blockedPlatformsState[platform] ?: false
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { blockedPlatformsState[platform] = !isChecked }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isChecked,
+                                onCheckedChange = { blockedPlatformsState[platform] = it },
+                                colors = CheckboxDefaults.colors(checkedColor = BrandColors.PrimaryIndigo)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            PlatformAppIcon(
+                                platformName = platform,
+                                size = 20.dp,
+                                clipShape = RoundedCornerShape(4.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(platform, color = BrandColors.SoftWhite, fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val serialized = blockedPlatformsState.filter { it.value }.keys.joinToString(",")
+                    val entity = scheduleToEdit?.copy(
+                        label = labelInput.ifBlank { "Focus Block" },
+                        startTime = startTimeInput.ifBlank { "09:00" },
+                        endTime = endTimeInput.ifBlank { "17:00" },
+                        blockedPlatforms = serialized
+                    ) ?: BlockScheduleEntity(
+                        label = labelInput.ifBlank { "Focus Block" },
+                        startTime = startTimeInput.ifBlank { "09:00" },
+                        endTime = endTimeInput.ifBlank { "17:00" },
+                        blockedPlatforms = serialized,
+                        isEnabled = true
+                    )
+                    onSave(entity)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = BrandColors.PrimaryIndigo),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(if (isEditing) "Save Changes" else "Save Block", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = BrandColors.SlateGray)
+            }
+        }
+    )
 }
 
 @Composable
@@ -1066,11 +1181,6 @@ fun BlockerPomodoroTabContent(viewModel: ScreentimeViewModel) {
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = BrandColors.SoftWhite
-                )
-                Text(
-                    text = "Begin an immediate focused sprint which strictly shields you from opening selected platforms.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = BrandColors.SlateGray
                 )
             }
 

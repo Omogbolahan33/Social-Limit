@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.viewmodel.DayStartTriggerMode
 import com.example.viewmodel.ScreentimeViewModel
 
 @Composable
@@ -37,6 +38,7 @@ fun SettingsScreen(
     val efficiencyLockThreshold by viewModel.efficiencyLockThreshold.collectAsState()
     val efficiencyLockedPlatforms by viewModel.efficiencyLockedPlatforms.collectAsState()
     val userName by viewModel.userName.collectAsState()
+    val dayStartTriggerMode by viewModel.dayStartTriggerMode.collectAsState()
     var hasPermission by remember { mutableStateOf(viewModel.hasUsageStatsPermission()) }
     var showResetConfirmDialog by remember { mutableStateOf(false) }
     var showEditNameDialog by remember { mutableStateOf(false) }
@@ -53,13 +55,20 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(4.dp))
 
         // Screen Section Title
-        Text(
-            text = "SETTINGS & PREFERENCES",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Black,
-            color = BrandColors.SoftWhite,
-            letterSpacing = 1.sp
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "SETTINGS & PREFERENCES",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                color = BrandColors.SoftWhite,
+                letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            HelpIconButton(
+                title = "Settings & Preferences",
+                helpText = "• Day Start Trigger: Choose whether your daily baseline begins upon first phone unlock or first monitored app launch.\n\n• Notifications: Configure live status bar countdown banners and limit warning alerts.\n\n• Efficiency Lockout: Automatically restrict distracting apps when your daylight productivity falls below target.\n\n• Danger Zone: Reset all logged analytics back to defaults."
+            )
+        }
 
         // 0. User Profile Card
         Card(
@@ -125,37 +134,6 @@ fun SettingsScreen(
                         Icon(Icons.Default.Edit, contentDescription = "Edit Name", tint = BrandColors.PrimaryIndigo)
                     }
                 }
-
-                HorizontalDivider(color = BrandColors.SlateGray.copy(alpha = 0.12f))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "First-Time Onboarding",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = BrandColors.SoftWhite
-                        )
-                        Text(
-                            text = "Reconfigure monitored apps, goals, and setup",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BrandColors.SlateGray
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = { viewModel.resetOnboarding() },
-                        shape = RoundedCornerShape(10.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, BrandColors.PrimaryIndigo)
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp), tint = BrandColors.PrimaryIndigo)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Replay Tour", fontSize = 12.sp, color = BrandColors.PrimaryIndigo, fontWeight = FontWeight.Bold)
-                    }
-                }
             }
         }
 
@@ -212,15 +190,129 @@ fun SettingsScreen(
                 if (!hasPermission) {
                     Button(
                         onClick = {
-                            try {
-                                context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                            } catch (_: Exception) {}
+                            PermissionUtils.launchUsageAccessPrompt(context)
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandColors.ErrorRose),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandColors.PrimaryIndigo),
                         shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
-                        Text("Grant", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Allow", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // 2. Day Start Trigger Configuration
+        Text(
+            text = "DAY START TRIGGER",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = BrandColors.PrimaryIndigo
+        )
+
+        Card(
+            colors = CardDefaults.cardColors(containerColor = BrandColors.TonalSurface),
+            shape = RoundedCornerShape(20.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, BrandColors.SlateGray.copy(alpha = 0.12f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(BrandColors.NeonAmber.copy(alpha = 0.12f), shape = CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.WbSunny,
+                            contentDescription = null,
+                            tint = BrandColors.NeonAmber,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Daily Daylight Anchor",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandColors.SoftWhite
+                    )
+                }
+
+                // Option 1: First Monitored App
+                val isFirstApp = dayStartTriggerMode == DayStartTriggerMode.FIRST_MONITORED_APP
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.setDayStartTriggerMode(DayStartTriggerMode.FIRST_MONITORED_APP) },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isFirstApp) BrandColors.PrimaryIndigo.copy(alpha = 0.08f) else BrandColors.TonalSurface
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        if (isFirstApp) 2.dp else 1.dp,
+                        if (isFirstApp) BrandColors.PrimaryIndigo else BrandColors.SlateGray.copy(alpha = 0.15f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isFirstApp,
+                            onClick = { viewModel.setDayStartTriggerMode(DayStartTriggerMode.FIRST_MONITORED_APP) },
+                            colors = RadioButtonDefaults.colors(selectedColor = BrandColors.PrimaryIndigo)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "First Monitored App Used",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandColors.SoftWhite
+                        )
+                    }
+                }
+
+                // Option 2: First Phone Unlock
+                val isFirstUnlock = dayStartTriggerMode == DayStartTriggerMode.FIRST_PHONE_UNLOCK
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.setDayStartTriggerMode(DayStartTriggerMode.FIRST_PHONE_UNLOCK) },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isFirstUnlock) BrandColors.PrimaryIndigo.copy(alpha = 0.08f) else BrandColors.TonalSurface
+                    ),
+                    shape = RoundedCornerShape(14.dp),
+                    border = androidx.compose.foundation.BorderStroke(
+                        if (isFirstUnlock) 2.dp else 1.dp,
+                        if (isFirstUnlock) BrandColors.PrimaryIndigo else BrandColors.SlateGray.copy(alpha = 0.15f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isFirstUnlock,
+                            onClick = { viewModel.setDayStartTriggerMode(DayStartTriggerMode.FIRST_PHONE_UNLOCK) },
+                            colors = RadioButtonDefaults.colors(selectedColor = BrandColors.PrimaryIndigo)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "First Phone Unlock (Recommended)",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = BrandColors.SoftWhite
+                        )
                     }
                 }
             }
@@ -282,13 +374,6 @@ fun SettingsScreen(
                         )
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Triggers a live countdown widget in your notification drawer when within 10 minutes of active platform limits.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = BrandColors.SlateGray,
-                    lineHeight = 16.sp
-                )
             }
         }
 
@@ -340,13 +425,6 @@ fun SettingsScreen(
                         )
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Delivers high-priority system notifications immediately upon exceeding configured platform screen time goals.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = BrandColors.SlateGray,
-                    lineHeight = 16.sp
-                )
             }
         }
 
@@ -405,13 +483,6 @@ fun SettingsScreen(
                         )
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Lock specified social media apps when your overall Daylight Screen Efficiency falls below your configured threshold.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = BrandColors.SlateGray,
-                    lineHeight = 16.sp
-                )
 
                 if (efficiencyLockEnabled) {
                     Spacer(modifier = Modifier.height(16.dp))
@@ -525,13 +596,6 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = BrandColors.ErrorRose
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Reset all tracked usage history, custom schedules, and user limit configurations back to defaults.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = BrandColors.SlateGray,
-                    lineHeight = 15.sp
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(

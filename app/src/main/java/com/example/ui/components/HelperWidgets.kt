@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,6 +34,101 @@ import androidx.core.graphics.drawable.toBitmap
 import java.util.Locale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+object PermissionUtils {
+    fun launchUsageAccessPrompt(context: android.content.Context) {
+        try {
+            // Directly target this specific package so Android immediately opens ScreenTime's permission prompt toggle
+            val intent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                data = android.net.Uri.parse("package:${context.packageName}")
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                val fallbackIntent = android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                    flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(fallbackIntent)
+            } catch (e2: Exception) {
+                // Ignore
+            }
+        }
+    }
+}
+
+@Composable
+fun UsagePermissionPromptDialog(
+    onDismiss: () -> Unit,
+    onGrant: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(BrandColors.PrimaryIndigo.copy(alpha = 0.12f), shape = CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Security,
+                    contentDescription = null,
+                    tint = BrandColors.PrimaryIndigo,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        },
+        title = {
+            Text(
+                text = "Allow ScreenTime to access app usage?",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                color = BrandColors.SoftWhite
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "ScreenTime requires usage access to automatically measure active screen time on your selected apps and protect your daily limits.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BrandColors.SlateGray,
+                    textAlign = TextAlign.Center
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(BrandColors.ForestGreen.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = BrandColors.ForestGreen, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "100% private. Your usage data never leaves your device.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = BrandColors.ForestGreen,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onGrant,
+                colors = ButtonDefaults.buttonColors(containerColor = BrandColors.PrimaryIndigo),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Allow Access", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = null,
+        shape = RoundedCornerShape(20.dp),
+        containerColor = BrandColors.TonalSurface
+    )
+}
 
 // Color styling constants strictly from: White, Blue, Blank, Orange, Brown, Chocolate, Green and Gold
 object BrandColors {
@@ -563,4 +659,86 @@ object GreetingHelper {
         }
     }
 }
+
+@Composable
+fun HelpIconButton(
+    title: String,
+    helpText: String,
+    modifier: Modifier = Modifier,
+    isWarning: Boolean = false
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(
+                if (isWarning) BrandColors.NeonAmber.copy(alpha = 0.14f)
+                else BrandColors.PrimaryIndigo.copy(alpha = 0.12f)
+            )
+            .clickable { showDialog = true },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = if (isWarning) "!" else "?",
+            fontWeight = FontWeight.Black,
+            fontSize = 12.sp,
+            color = if (isWarning) BrandColors.NeonAmber else BrandColors.PrimaryIndigo
+        )
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(
+                            if (isWarning) BrandColors.NeonAmber.copy(alpha = 0.14f)
+                            else BrandColors.PrimaryIndigo.copy(alpha = 0.12f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isWarning) "!" else "?",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 20.sp,
+                        color = if (isWarning) BrandColors.NeonAmber else BrandColors.PrimaryIndigo
+                    )
+                }
+            },
+            title = {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = BrandColors.SoftWhite
+                )
+            },
+            text = {
+                Text(
+                    text = helpText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BrandColors.SlateGray,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandColors.PrimaryIndigo),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Got It", fontWeight = FontWeight.Bold)
+                }
+            },
+            shape = RoundedCornerShape(20.dp),
+            containerColor = BrandColors.TonalSurface
+        )
+    }
+}
+
 
